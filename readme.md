@@ -1,4 +1,4 @@
-# About ME
+# About me
 ## Hi there 👋
 - 😄 Editing...
 
