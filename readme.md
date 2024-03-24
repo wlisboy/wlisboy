@@ -6,6 +6,5 @@
 - 😄 Editing...
 
 # Hello World!! 🤔
-
-[![Lisboy777's github stats](https://github-readme-stats.vercel.app/api?username=Lisbiy777](https://github.com/anuraghazra/github-readme-stats)
+[![Anurag's GitHub stats](https://github-readme-stats.vercel.app/api?username=Lisboy777)](https://github.com/anuraghazra/github-readme-stats)
 
