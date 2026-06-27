@@ -1,10 +1,16 @@
 import base64
 import re
+import sys
 import requests
-import subprocess
 import argparse
 
 _ID_KEY = "Mm9kbGtzTVNMUEZOVzg0NTAza3N1OTl2bnd1ZAo="
+
+
+class _HelpParser(argparse.ArgumentParser):
+    def error(self, message):
+        message = message.replace("not allowed with argument", "不允许与参数同时使用").replace("expected one argument", "仅允许一个参数使用")
+        self.exit(2, f"\n错误: {message}\n")
 
 
 def get_latest_version():
@@ -34,50 +40,93 @@ def build_links(version):
 
     _id = base64.b64decode(_ID_KEY).decode().strip()
 
-    null = f"https://download.internetdownloadmanager.com/download/idman{v_link}.exe"
-    null_mirror = f"https://mirror2.internetdownloadmanager.com/download/idman{v_link}.exe"
+    web_url = f"https://download.internetdownloadmanager.com/download/idman{v_link}.exe"
+    web_url_mirror = f"https://mirror2.internetdownloadmanager.com/download/idman{v_link}.exe"
     full = f"https://download.internetdownloadmanager.com/commerce/{_id}/idman{v_link}f.exe"
     full_mirror = f"https://mirror2.internetdownloadmanager.com/commerce/{_id}/idman{v_link}f.exe"
 
-    return null, null_mirror, full, full_mirror
+    return web_url, web_url_mirror, full, full_mirror
 
 
 def cmd_info(version):
-    print("版本信息:", version)
+    print("最新版本号:", version)
 
 
-def cmd_list(null, full):
-    print("默认下载地址")
-    print("-" * 40)
-    print("web版下载地址:", null)
-    print("full版下载地址:", full)
+def cmd_list(web_url, full):
+    print("web版:", web_url)
+    print("full版:", full)
 
 
-def cmd_best(null_mirror, full_mirror):
-    print("加速下载地址")
-    print("-" * 40)
-    print("web版加速下载地址:", null_mirror)
-    print("full版加速下载地址:", full_mirror)
+def cmd_best(web_url_mirror, full_mirror):
+    print("web版:", web_url_mirror)
+    print("full版:", full_mirror)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="IDM CLI Helper")
+    args_raw = sys.argv[1:]
+    processed = []
+    hist_ver = None
+    i = 0
+    while i < len(args_raw):
+        if args_raw[i] in ("-v", "--version"):
+            if i + 1 < len(args_raw):
+                i += 1
+                parts = []
+                while i < len(args_raw) and not args_raw[i].startswith("-"):
+                    parts.append(args_raw[i])
+                    i += 1
+                if parts:
+                    hist_ver = " ".join(parts)
+                else:
+                    processed.append("-i")
+            else:
+                processed.append("-i")
+                i += 1
+        else:
+            processed.append(args_raw[i])
+            i += 1
 
-    parser.add_argument("-v", "-version", type=str, nargs="+", default=None, help="指定版本号，如 6.42 Build 64，可前往 https://www.internetdownloadmanager.com/news.html 获取版本号")
-    parser.add_argument("-i", "-info", action="store_true", help="获取版本信息")
-    parser.add_argument("-l", "-list", action="store_true", help="列出默认下载地址")
-    parser.add_argument("-b", "-best", action="store_true", help="列出加速下载地址")
+    if hist_ver:
+        processed += ["--hist-ver", hist_ver]
+        if any(x in args_raw for x in ("-h", "--help", "-i", "--info")):
+            print("错误: -v 带版本号时只允许与 -l 或 -b 配合使用")
+            return
 
-    args = parser.parse_args()
+    parser = _HelpParser(
+        description="运行参数",
+        formatter_class=argparse.RawTextHelpFormatter,
+        add_help=False,
+        conflict_handler="resolve",
+    )
 
-    # 没有任何参数时显示帮助
-    if not any([args.v, args.i, args.l, args.b]):
+    parser.add_argument("-v", "--version", action="store_true",
+                        help="指定版本号与 -l 或 -b 配合使用,\n"
+                             "如 -v 6.42 Build 64 -l 或 -v 6.42 Build 64 -b,\n"
+                             "可前往 https://www.internetdownloadmanager.com/news.html 获取版本号")
+
+    parser.add_argument("--hist-ver", type=str, help=argparse.SUPPRESS)
+
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-h", "--help", action="help", help="显示帮助信息")
+    group.add_argument("-i", "--info", action="store_true", help="查询最新版本号")
+    group.add_argument("-l", "--list", action="store_true", help="列出默认下载地址")
+    group.add_argument("-b", "--best", action="store_true", help="列出加速下载地址")
+
+    args = parser.parse_args(processed)
+
+    if hist_ver and not args.list and not args.best:
+        args.info = True
+        hist_ver = None
+
+    if args.version and not hist_ver:
+        args.info = True
+
+    if not any([args.version, args.info, args.list, args.best, hist_ver]):
         parser.print_help()
         return
 
-    # 解析版本号
-    if args.v:
-        version = " ".join(args.v)
+    if hist_ver:
+        version = hist_ver
     else:
         try:
             version = get_latest_version()
@@ -89,17 +138,16 @@ def main():
         print("无法获取版本")
         return
 
-    null, null_mirror, full, full_mirror = build_links(version)
+    web_url, web_url_mirror, full, full_mirror = build_links(version)
 
-    # 默认行为：无 -l -b 时显示版本信息
-    if args.i or (not args.l and not args.b):
+    if args.info:
         cmd_info(version)
-
-    if args.l:
-        cmd_list(null, full)
-
-    if args.b:
-        cmd_best(null_mirror, full_mirror)
+    elif args.list:
+        cmd_list(web_url, full)
+    elif args.best:
+        cmd_best(web_url_mirror, full_mirror)
+    else:
+        cmd_info(version)
 
 
 if __name__ == "__main__":
