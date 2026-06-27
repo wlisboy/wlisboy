@@ -43,18 +43,18 @@ def build_links(version):
 
 
 def cmd_info(version):
-    print("最新版本:", version)
+    print("版本信息:", version)
 
 
 def cmd_list(null, full):
-    print("Download List (--list)")
+    print("默认下载地址")
     print("-" * 40)
     print("web版下载地址:", null)
     print("full版下载地址:", full)
 
 
 def cmd_best(null_mirror, full_mirror):
-    print("Best Mirrors (--best)")
+    print("加速下载地址")
     print("-" * 40)
     print("web版加速下载地址:", null_mirror)
     print("full版加速下载地址:", full_mirror)
@@ -63,21 +63,27 @@ def cmd_best(null_mirror, full_mirror):
 def main():
     parser = argparse.ArgumentParser(description="IDM CLI Helper")
 
-    parser.add_argument("--info", action="store_true", help="获取版本信息")
-    parser.add_argument("--list", action="store_true", help="列出默认下载地址")
-    parser.add_argument("--best", action="store_true", help="列出加速下载地址")
+    parser.add_argument("-v", "-version", type=str, nargs="+", default=None, help="指定版本号，如 6.42 Build 64，可前往 https://www.internetdownloadmanager.com/news.html 获取版本号")
+    parser.add_argument("-i", "-info", action="store_true", help="获取版本信息")
+    parser.add_argument("-l", "-list", action="store_true", help="列出默认下载地址")
+    parser.add_argument("-b", "-best", action="store_true", help="列出加速下载地址")
 
     args = parser.parse_args()
-    
-    if not any(vars(args).values()):
+
+    # 没有任何参数时显示帮助
+    if not any([args.v, args.i, args.l, args.b]):
         parser.print_help()
         return
 
-    try:
-        version = get_latest_version()
-    except Exception as e:
-        print("获取失败:", e)
-        return
+    # 解析版本号
+    if args.v:
+        version = " ".join(args.v)
+    else:
+        try:
+            version = get_latest_version()
+        except Exception as e:
+            print("获取失败:", e)
+            return
 
     if not version:
         print("无法获取版本")
@@ -85,13 +91,14 @@ def main():
 
     null, null_mirror, full, full_mirror = build_links(version)
 
-    if args.info or (not args.list and not args.best):
+    # 默认行为：无 -l -b 时显示版本信息
+    if args.i or (not args.l and not args.b):
         cmd_info(version)
 
-    if args.list:
+    if args.l:
         cmd_list(null, full)
 
-    if args.best:
+    if args.b:
         cmd_best(null_mirror, full_mirror)
 
 
