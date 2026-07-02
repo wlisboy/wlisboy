@@ -20,7 +20,7 @@ def fetch_announced_prefixes(asn):
 
     print(f"[*] 正在从 RIPE Stat 获取 AS{asn} 的原始数据...\n")
     headers = {
-    # UA 建议从：https://tool.ip138.com/useragent 获取
+    # UA建议从：https://tool.ip138.com/useragent 获取
         "User-Agent": "UA",
     }
 
@@ -37,6 +37,15 @@ def fetch_announced_prefixes(asn):
     except Exception as e:
         print(f"[-] 获取数据失败: {e}")
         return []
+
+
+def filter_by_ip_version(prefixes, ip_version):
+    """根据 IP 版本过滤 prefix（IPv4 用 '.'，IPv6 用 ':'）"""
+    if ip_version == 4:
+        return [p for p in prefixes if ":" not in p.get("prefix", "")]
+    elif ip_version == 6:
+        return [p for p in prefixes if ":" in p.get("prefix", "")]
+    return prefixes
 
 
 def process_prefixes(prefixes, filter_date=None):
@@ -73,7 +82,7 @@ def process_prefixes(prefixes, filter_date=None):
 
 
 def parse_user_date(time_str):
-    """解析用户输入的日期字符串，统一转化为纯日期"""
+    """解析用户输入的日期字符串，统一转化为纯日期对象"""
     if not time_str:
         return None
 
@@ -105,30 +114,47 @@ if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser(description="RIPE Stat ASN Prefix 查询与过滤工具")
     
     arg_parser.add_argument("-a", "--asn", required=True, type=int, metavar="", help="目标自治系统号 (ASN)")
+    group = arg_parser.add_mutually_exclusive_group()
+    group.add_argument("-4", "--ipv4", action="store_true", default=False, help="仅获取 IPv4 Prefix")
+    group.add_argument("-6", "--ipv6", action="store_true", default=False, help="仅获取 IPv6 Prefix")
     arg_parser.add_argument("-t", "--time", type=str, default=None, metavar="", help="过滤的起始日期 (例如: 20260701)")
     arg_parser.add_argument("-o", "--output", type=str, default=None, metavar="", help="输出本地 CSV 的文件名 (例如: result.csv)")
 
     args = arg_parser.parse_args()
+
+    if (args.ipv4 or args.ipv6) and not args.time:
+        arg_parser.error("指定 -4/-6 时必须同时使用 -t 指定时间过滤 (例如: -4 -t 20260701)")
+
     target_date = parse_user_date(args.time)
     
     raw_prefixes = fetch_announced_prefixes(args.asn)
 
     if raw_prefixes:
+        # 根据 -4/-6 参数过滤 IP 版本
+        ip_version = 4 if args.ipv4 else (6 if args.ipv6 else None)
+        if ip_version:
+            raw_prefixes = filter_by_ip_version(raw_prefixes, ip_version)
+            print(f"[*] 已过滤为仅 IPv{ip_version}，剩余 {len(raw_prefixes)} 条记录。")
+
         result = process_prefixes(raw_prefixes, target_date)
+    else:
+        result = []
 
-        print(f"[+] 满足时间过滤条件并排序后的 Prefix 数量: {len(result)}")
-        if not result:
-            print("[*] 未找到符合指定日期过滤条件的记录。")
-        else:
-            if args.output:
-                save_to_csv(result, args.output)
-                print("") 
+    print(f"[+] 满足时间过滤条件并排序后的 Prefix 数量: {len(result)}")
+    if not result:
+        print("[*] 未找到符合指定日期过滤条件的记录。")
 
-            # 控制台预览前 50 条数据
-            print(f"{'Prefix':<25} | {'Last Seen (UTC)':<25}")
-            print("-" * 60)
-            for row in result[:50]:
-                print(f"{row['prefix']:<25} | {row['last_seen_str']:<25}")
+    # 指定 -o 时始终写入文件（结果为空也会生成空文件，同名文件自动覆盖）
+    if args.output:
+        save_to_csv(result, args.output)
+        print("")
 
-            if len(result) > 50:
-                print(f"\n... 还有 {len(result) - 50} 条记录未列出;若指定 -o 参数已全部写入 CSV 文件")
+    # 控制台预览前 50 条数据
+    if result:
+        print(f"{'Prefix':<25} | {'Last Seen (UTC)':<25}")
+        print("-" * 60)
+        for row in result[:50]:
+            print(f"{row['prefix']:<25} | {row['last_seen_str']:<25}")
+
+        if len(result) > 50:
+            print(f"\n... 还有 {len(result) - 50} 条记录未列出;若指定 -o 参数已全部写入 CSV 文件")
