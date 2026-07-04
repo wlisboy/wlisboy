@@ -7,7 +7,7 @@
 -v VERSION, --version VERSION
                         指定历史版本（如 7.20），需与 -l 或 -b 搭配使用，>=7.2
 
-# 举例
+# 示例  
 py winrar.py -v 7.20 -l
 py winrar.py -v 7.20 -b
 ```
