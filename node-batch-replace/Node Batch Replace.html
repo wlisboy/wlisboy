@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <title>Node Batch Replace</title>
+    <!-- jQuery -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <script>
+        (function () {
+            const storageKey = 'node_replace_theme';
+            let theme = 'dark';
+            try {
+                const storedTheme = localStorage.getItem(storageKey);
+                if (storedTheme === 'light' || storedTheme === 'dark') {
+                    theme = storedTheme;
+                } else {
+                    theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                }
+            } catch (error) {
+                theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.dataset.theme = theme;
+            document.documentElement.style.colorScheme = theme;
+        })();
+    </script>
+    <style>
+        :root {
+            --bg-base: #07111d;
+            --bg-deep: #0b1726;
+            --panel: rgba(10, 24, 40, 0.78);
+            --panel-strong: rgba(15, 31, 49, 0.92);
+            --line: rgba(144, 180, 212, 0.18);
+            --text: #edf7ff;
+            --text-soft: #d4e4f3;
+            --muted: #8ea6bc;
+            --accent: #61dbff;
+            --accent-strong: #2dd4bf;
+            --accent-warm: #ffb869;
+            --success: #34d399;
+            --error: #fb7185;
+            --warning: #fbbf24;
+            --shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+            --shadow-soft: 0 16px 44px rgba(0, 0, 0, 0.26);
+            --radius-xl: 30px;
+            --radius-lg: 24px;
+            --radius-md: 20px;
+        }
+
+        html {
+            color-scheme: dark;
+        }
+
+        html[data-theme='light'] {
+            color-scheme: light;
+            --bg-base: #eef6fb;
+            --bg-deep: #ffffff;
+            --panel: rgba(255, 255, 255, 0.72);
+            --panel-strong: rgba(255, 255, 255, 0.92);
+            --line: rgba(95, 123, 150, 0.18);
+            --text: #10253d;
+            --text-soft: #23415a;
+            --muted: #61778f;
+            --accent: #0ea5e9;
+            --accent-strong: #14b8a6;
+            --accent-warm: #f59e0b;
+            --success: #059669;
+            --error: #e11d48;
+            --warning: #d97706;
+            --shadow: 0 24px 64px rgba(43, 67, 91, 0.14);
+            --shadow-soft: 0 16px 34px rgba(43, 67, 91, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            min-height: 100%;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(45, 212, 191, 0.18), transparent 28%),
+                radial-gradient(circle at 85% 12%, rgba(97, 219, 255, 0.18), transparent 24%),
+                radial-gradient(circle at 50% 110%, rgba(255, 184, 105, 0.16), transparent 30%),
+                linear-gradient(180deg, #06101b 0%, #081321 38%, #0a1624 100%);
+            overflow-x: hidden;
+            transition: background 0.28s ease, color 0.28s ease;
+            line-height: 1.6;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+            background-size: 46px 46px;
+            mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.38), transparent 92%);
+            opacity: 0.12;
+        }
+
+        html[data-theme='light'] body {
+            background:
+                radial-gradient(circle at top left, rgba(20, 184, 166, 0.16), transparent 30%),
+                radial-gradient(circle at 88% 12%, rgba(14, 165, 233, 0.14), transparent 24%),
+                radial-gradient(circle at 50% 110%, rgba(245, 158, 11, 0.12), transparent 28%),
+                linear-gradient(180deg, #f6fbff 0%, #eef5fb 44%, #e8f1f7 100%);
+        }
+
+        html[data-theme='light'] body::before {
+            background-image:
+                linear-gradient(rgba(16, 37, 61, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(16, 37, 61, 0.05) 1px, transparent 1px);
+            mask-image: linear-gradient(180deg, rgba(255, 255, 255, 0.68), transparent 92%);
+            opacity: 0.28;
+        }
+
+        button, input, select, textarea {
+            font: inherit;
+        }
+
+        /* Page Shell */
+        .page-shell {
+            position: relative;
+            min-height: 100vh;
+            padding: 32px 24px 40px;
+        }
+
+        /* Ambient Glow */
+        .ambient {
+            position: fixed;
+            border-radius: 999px;
+            filter: blur(80px);
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.28;
+        }
+
+        .ambient-one {
+            width: 34rem;
+            height: 34rem;
+            left: -9rem;
+            top: 10rem;
+            background: rgba(97, 219, 255, 0.22);
+        }
+
+        .ambient-two {
+            width: 28rem;
+            height: 28rem;
+            right: -6rem;
+            top: -3rem;
+            background: rgba(45, 212, 191, 0.18);
+        }
+
+        html[data-theme='light'] .ambient-one {
+            background: rgba(56, 189, 248, 0.2);
+        }
+
+        html[data-theme='light'] .ambient-two {
+            background: rgba(45, 212, 191, 0.16);
+        }
+
+        /* Container */
+        .site-main {
+            position: relative;
+            z-index: 1;
+            max-width: 960px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .site-header {
+            display: flex;
+            justify-content: flex-start;
+            align-items: flex-start;
+            gap: 24px;
+            margin-bottom: 28px;
+            position: relative;
+            z-index: 1;
+            max-width: 960px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .brand {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .brand-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 14px;
+            align-self: flex-start;
+            padding: 8px 10px 8px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(97, 219, 255, 0.16);
+            background: rgba(12, 26, 43, 0.66);
+            color: #bfeeff;
+            font-size: 0.78rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            backdrop-filter: blur(12px);
+        }
+
+        html[data-theme='light'] .brand-chip {
+            background: rgba(255, 255, 255, 0.66);
+            border-color: rgba(14, 165, 233, 0.2);
+            color: #0c4a6e;
+        }
+
+        .brand-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+            box-shadow: 0 0 18px rgba(97, 219, 255, 0.7);
+        }
+
+        .brand-title {
+            font-family: 'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
+            font-size: clamp(1.7rem, 4vw, 2.75rem);
+            font-weight: 700;
+            line-height: 0.98;
+            letter-spacing: -0.04em;
+            color: var(--text);
+        }
+
+        /* Theme Toggle */
+        .theme-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            border: none;
+            background: transparent;
+            color: var(--text);
+            cursor: pointer;
+            transition: color 0.28s ease;
+            margin-left: auto;
+        }
+
+        .theme-toggle-switch {
+            position: relative;
+            width: 56px;
+            height: 30px;
+            flex: none;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: linear-gradient(135deg, rgba(97, 219, 255, 0.18), rgba(45, 212, 191, 0.12));
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+            transition: transform 0.2s ease, background 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease;
+        }
+
+        .theme-toggle:hover .theme-toggle-switch {
+            transform: translateY(-1px);
+            border-color: rgba(97, 219, 255, 0.2);
+        }
+
+        .theme-toggle-icon {
+            position: absolute;
+            top: 9px;
+            width: 12px;
+            height: 12px;
+            pointer-events: none;
+        }
+
+        .theme-toggle-icon-light {
+            left: 8px;
+            color: #ffd97d;
+        }
+
+        .theme-toggle-icon-dark {
+            right: 8px;
+            color: #d9efff;
+        }
+
+        .theme-toggle-thumb {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ffffff, #d9e9f7);
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.24);
+            transform: translateX(28px);
+            transition: transform 0.28s ease, background 0.28s ease, box-shadow 0.28s ease;
+        }
+
+        html[data-theme='light'] .theme-toggle-thumb {
+            transform: translateX(0);
+            background: linear-gradient(135deg, #fff9d9, #ffd88a);
+            box-shadow: 0 8px 16px rgba(168, 116, 23, 0.18);
+        }
+
+        html[data-theme='light'] .theme-toggle-switch {
+            border-color: rgba(84, 112, 139, 0.14);
+            background: linear-gradient(135deg, rgba(254, 240, 138, 0.56), rgba(125, 211, 252, 0.34));
+        }
+
+        html[data-theme='light'] .theme-toggle-icon-light {
+            color: #d97706;
+        }
+
+        html[data-theme='light'] .theme-toggle-icon-dark {
+            color: #2563eb;
+        }
+
+        /* Surface Card */
+        .surface-card {
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 36%),
+                var(--panel);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(18px);
+            padding: 36px;
+            margin-bottom: 24px;
+        }
+
+        html[data-theme='light'] .surface-card {
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.6), transparent 36%),
+                var(--panel);
+        }
+
+        /* Section Kicker */
+        .section-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0 0 18px;
+            font-size: 0.82rem;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #9feaff;
+        }
+
+        .section-kicker::before {
+            content: '';
+            width: 26px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(97, 219, 255, 0.85));
+        }
+
+        html[data-theme='light'] .section-kicker {
+            color: var(--accent);
+        }
+
+        html[data-theme='light'] .section-kicker::before {
+            background: linear-gradient(90deg, transparent, var(--accent));
+        }
+
+        /* Info Box */
+        .info-box {
+            padding: 20px 24px;
+            border-radius: 22px;
+            border: 1px solid rgba(97, 219, 255, 0.16);
+            background:
+                linear-gradient(90deg, rgba(97, 219, 255, 0.1), rgba(45, 212, 191, 0.08), rgba(255, 184, 105, 0.08)),
+                rgba(255, 255, 255, 0.02);
+            color: #d7edf9;
+            line-height: 1.8;
+            margin-bottom: 28px;
+            font-size: 0.95rem;
+        }
+
+        html[data-theme='light'] .info-box {
+            border-color: rgba(14, 165, 233, 0.2);
+            background:
+                linear-gradient(90deg, rgba(14, 165, 233, 0.08), rgba(20, 184, 166, 0.06), rgba(245, 158, 11, 0.06)),
+                rgba(255, 255, 255, 0.4);
+            color: var(--text-soft);
+        }
+
+        .info-box strong {
+            color: var(--text);
+        }
+
+        .protocol-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .protocol-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            border: 1px solid rgba(97, 219, 255, 0.24);
+            background: rgba(97, 219, 255, 0.12);
+            color: #bff4ff;
+            white-space: nowrap;
+        }
+
+        html[data-theme='light'] .protocol-badge {
+            border-color: rgba(14, 165, 233, 0.24);
+            background: rgba(14, 165, 233, 0.1);
+            color: #0c4a6e;
+        }
+
+        /* Error Box */
+        #err {
+            margin: 0 0 24px;
+            padding: 18px 22px;
+            border-radius: 22px;
+            border: 1px solid rgba(251, 113, 133, 0.28);
+            background: rgba(251, 113, 133, 0.1);
+            color: var(--error);
+            font-weight: 600;
+            font-size: 0.95rem;
+            line-height: 1.7;
+        }
+
+        html[data-theme='light'] #err {
+            background: rgba(225, 29, 72, 0.06);
+            border-color: rgba(225, 29, 72, 0.2);
+            color: var(--error);
+        }
+
+        /* Form Group */
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .field-label {
+            display: block;
+            margin-bottom: 12px;
+            font-size: 0.92rem;
+            font-weight: 700;
+            color: var(--text-soft);
+            letter-spacing: 0.01em;
+        }
+
+        /* Input Controls */
+        textarea {
+            width: 100%;
+            height: 150px;
+            min-height: 100px;
+            padding: 18px 20px;
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            background: rgba(4, 14, 24, 0.52);
+            color: var(--text);
+            font-family: 'Space Grotesk', 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 14px;
+            line-height: 1.75;
+            resize: vertical;
+            overflow: auto;
+            scrollbar-width: none;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+            transition: border-color 0.24s ease, box-shadow 0.24s ease, background 0.24s ease;
+        }
+
+        textarea::-webkit-scrollbar {
+            display: none;
+        }
+
+        textarea::placeholder {
+            color: #7390a9;
+        }
+
+        textarea:focus {
+            outline: none;
+            background: rgba(5, 18, 29, 0.74);
+            border-color: rgba(97, 219, 255, 0.34);
+            box-shadow: 0 0 0 4px rgba(97, 219, 255, 0.08);
+        }
+
+        html[data-theme='light'] textarea {
+            background: rgba(255, 255, 255, 0.6);
+            border-color: var(--line);
+        }
+
+        html[data-theme='light'] textarea::placeholder {
+            color: #94a3b8;
+        }
+
+        html[data-theme='light'] textarea:focus {
+            background: rgba(255, 255, 255, 0.85);
+            border-color: rgba(14, 165, 233, 0.4);
+            box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.08);
+        }
+
+        /* Action Bar */
+        .action-bar-row {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+            padding: 22px 24px;
+            border-radius: 26px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)),
+                rgba(255, 255, 255, 0.03);
+        }
+
+        html[data-theme='light'] .action-bar-row {
+            background: rgba(255, 255, 255, 0.5);
+            border-color: var(--line);
+        }
+
+        .action-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .action-item label {
+            margin-bottom: 0;
+            font-weight: 600;
+            color: var(--text-soft);
+            font-size: 0.92rem;
+            white-space: nowrap;
+        }
+
+        select, input[type="number"] {
+            padding: 10px 16px;
+            height: 42px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            min-width: 110px;
+            background: rgba(4, 14, 24, 0.52);
+            color: var(--text);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+            transition: border-color 0.24s ease, box-shadow 0.24s ease, background 0.24s ease;
+        }
+
+        select {
+            appearance: none;
+            -webkit-appearance: none;
+            padding-right: 36px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238ea6bc' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+            background-size: 12px;
+            cursor: pointer;
+        }
+
+        input[type="number"] {
+            appearance: textfield;
+            -moz-appearance: textfield;
+            max-width: 100px;
+        }
+
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            appearance: none;
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        select:focus, input[type="number"]:focus {
+            outline: none;
+            background-color: rgba(5, 18, 29, 0.74);
+            border-color: rgba(97, 219, 255, 0.34);
+            box-shadow: 0 0 0 3px rgba(97, 219, 255, 0.1);
+        }
+
+        select:hover, input[type="number"]:hover {
+            border-color: rgba(97, 219, 255, 0.22);
+        }
+
+        html[data-theme='light'] select,
+        html[data-theme='light'] input[type="number"] {
+            background-color: rgba(255, 255, 255, 0.7);
+            border-color: var(--line);
+            color: var(--text);
+        }
+
+        html[data-theme='light'] select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2361778f' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+        }
+
+        html[data-theme='light'] select:focus,
+        html[data-theme='light'] input[type="number"]:focus {
+            background-color: rgba(255, 255, 255, 0.9);
+            border-color: rgba(14, 165, 233, 0.4);
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+        }
+
+        html[data-theme='light'] select:hover,
+        html[data-theme='light'] input[type="number"]:hover {
+            border-color: rgba(14, 165, 233, 0.3);
+        }
+
+        /* Toggle Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 26px;
+            flex: none;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+            position: absolute;
+        }
+
+        .switch .slider {
+            position: absolute;
+            inset: 0;
+            cursor: pointer;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: background 0.28s ease, border-color 0.28s ease;
+        }
+
+        .switch .slider::before {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            left: 3px;
+            top: 3px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
+            transition: transform 0.28s ease;
+        }
+
+        .switch input:checked + .slider {
+            background: linear-gradient(135deg, rgba(97, 219, 255, 0.92), rgba(45, 212, 191, 0.84));
+            border-color: transparent;
+        }
+
+        .switch input:checked + .slider::before {
+            transform: translateX(22px);
+        }
+
+        html[data-theme='light'] .switch .slider {
+            background: rgba(0, 0, 0, 0.1);
+            border-color: rgba(0, 0, 0, 0.08);
+        }
+
+        html[data-theme='light'] .switch input:checked + .slider {
+            background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+        }
+
+        /* Primary Button */
+        .d-flex-center {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        #processBtn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            min-width: 220px;
+            height: 56px;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 22px;
+            background: linear-gradient(135deg, var(--accent), #8cf2ff 52%, var(--accent-warm));
+            color: #052538;
+            font-weight: 800;
+            font-size: 1.05rem;
+            cursor: pointer;
+            box-shadow: 0 18px 34px rgba(97, 219, 255, 0.28);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+            letter-spacing: 0.02em;
+        }
+
+        #processBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 24px 42px rgba(97, 219, 255, 0.34);
+        }
+
+        #processBtn:active {
+            transform: translateY(0);
+        }
+
+        #processBtn:disabled {
+            cursor: wait;
+            transform: none;
+            opacity: 0.74;
+            box-shadow: 0 14px 26px rgba(97, 219, 255, 0.18);
+        }
+
+        html[data-theme='light'] #processBtn {
+            box-shadow: 0 18px 34px rgba(14, 165, 233, 0.2);
+        }
+
+        html[data-theme='light'] #processBtn:hover {
+            box-shadow: 0 24px 42px rgba(14, 165, 233, 0.28);
+        }
+
+        /* Output textarea */
+        textarea#out {
+            background: rgba(4, 14, 24, 0.62);
+            height: 200px;
+        }
+
+        html[data-theme='light'] textarea#out {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Spinner */
+        .loading-spinner {
+            animation: spin 1s linear infinite;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Footer */
+        .site-footer {
+            text-align: center;
+            padding: 28px 0 12px;
+            color: var(--muted);
+            font-size: 0.85rem;
+            position: relative;
+            z-index: 1;
+            max-width: 960px;
+            margin: 0 auto;
+        }
+
+        .site-footer a {
+            color: var(--accent);
+            text-decoration: none;
+            border-bottom: 1px solid rgba(97, 219, 255, 0.26);
+        }
+
+        .site-footer a:hover {
+            color: #ffffff;
+            border-bottom-color: rgba(255, 255, 255, 0.42);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .page-shell {
+                padding: 20px 16px 32px;
+            }
+
+            .surface-card {
+                padding: 24px 20px;
+                border-radius: var(--radius-lg);
+            }
+
+            .site-header {
+                flex-direction: row;
+                gap: 16px;
+            }
+
+            .brand-title {
+                font-size: 1.5rem;
+            }
+
+            .action-bar-row {
+                flex-direction: column;
+                gap: 16px;
+                padding: 18px;
+                align-items: stretch;
+            }
+
+            .action-item {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            select, input[type="number"] {
+                width: auto;
+                min-width: unset;
+                max-width: 140px;
+            }
+
+            #processBtn {
+                width: 100%;
+                min-width: unset;
+            }
+        }
+
+        /* Transitions */
+        body,
+        .surface-card,
+        textarea,
+        select,
+        input,
+        #processBtn,
+        .info-box,
+        .protocol-badge,
+        .brand-chip,
+        #err,
+        .theme-toggle-switch,
+        .theme-toggle-thumb,
+        .action-bar-row {
+            transition: background 0.28s ease, border-color 0.28s ease, color 0.28s ease, box-shadow 0.28s ease, opacity 0.28s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-shell">
+        <!-- Ambient Glow -->
+        <div class="ambient ambient-one"></div>
+        <div class="ambient ambient-two"></div>
+
+        <!-- Header -->
+        <header class="site-header">
+            <div class="brand">
+                <h1 class="brand-title">NODE BATCH REPLACE</h1>
+                <div class="brand-chip">
+                    <span class="brand-dot"></span>
+                    <span>NODE BATCH REPLACE TOOL</span>
+                    <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">
+                        <div class="theme-toggle-switch">
+                            <svg class="theme-toggle-icon theme-toggle-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                            </svg>
+                            <svg class="theme-toggle-icon theme-toggle-icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+                            </svg>
+                            <div class="theme-toggle-thumb"></div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="site-main">
+            <div class="surface-card">
+                <!-- Info Box -->
+                <div class="info-box">
+                    <strong>支持的协议：</strong>vless / trojan / Shadowsocks
+                    <div class="protocol-badges" style="margin-top: 8px;">
+                        <span class="protocol-badge">IPv4</span>
+                        <span class="protocol-badge">IPv6</span>
+                        <span class="protocol-badge">域名</span>
+                        <span class="protocol-badge">CIDR段</span>
+                        <span class="protocol-badge">自定义端口</span>
+                    </div>
+                </div>
+
+                <div id="err" style="display: none;"></div>
+
+                <!-- Input Nodes -->
+                <div class="form-group">
+                    <label class="field-label" for="in">原始节点：</label>
+                    <textarea id="in" placeholder="请粘贴需要处理的节点"></textarea>
+                </div>
+
+                <!-- IP List -->
+                <div id="customview" class="form-group">
+                    <label class="field-label" for="cdniplist">IP/域名：</label>
+                    <textarea id="cdniplist" placeholder="支持格式（每行一个，可选 #备注 作为节点别名）&#10;IPv4: 1.2.3.4#别名 或 1.2.3.4:8443#别名 或 1.2.3.0/24#别名&#10;IPv6: [2606:4700::]#别名 或 [2606:4700::]:443#别名 或 2606:4700::/120#别名&#10;域名: www.example.com#别名 或 www.example.com:8443#别名"></textarea>
+                </div>
+
+                <!-- Controls -->
+                <div class="form-group d-flex-center">
+                    <div class="action-bar-row">
+                        <div class="action-item">
+                            <label for="getmethod">获取方式</label>
+                            <select id="getmethod">
+                                <option value="queue">顺序</option>
+                                <option value="random">随机</option>
+                            </select>
+                        </div>
+                        <div class="action-item">
+                            <label for="num">获取数量</label>
+                            <input id="num" name="num" type="number" value="100" min="1" max="10000">
+                        </div>
+                        <div class="action-item">
+                            <label for="filterIP">提取地址</label>
+                            <label class="switch">
+                                <input type="checkbox" id="filterIP">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Process Button -->
+                <div class="form-group d-flex-center">
+                    <button id="processBtn" onclick="exec()" onmousedown="$('#err').hide(); $('#out').val('');">
+                        开始处理
+                    </button>
+                </div>
+
+                <!-- Output -->
+                <div class="form-group">
+                    <label class="field-label" for="out">导出节点：</label>
+                    <textarea id="out" readonly placeholder="处理后的节点将显示在这里..."></textarea>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="site-footer">
+            NODE BATCH REPLACE TOOL &middot; 节点批量替换工具
+        </footer>
+    </div>
+
+    <script>
+    // Theme Toggle
+    function toggleTheme() {
+        const storageKey = 'node_replace_theme';
+        const current = document.documentElement.dataset.theme;
+        const next = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = next;
+        document.documentElement.style.colorScheme = next;
+        try { localStorage.setItem(storageKey, next); } catch (e) {}
+    }
+
+    // ==================== IP/CIDR 工具函数 ====================
+
+    // IPv4 工具
+    function ipToLong(ip) {
+        return ip.split('.').reduce((r, v) => (r << 8) + parseInt(v), 0) >>> 0;
+    }
+    function longToIp(l) {
+        return [24, 16, 8, 0].map(s => (l >>> s) & 255).join('.');
+    }
+
+    function expandIPv4CIDR(cidr) {
+        const [ip, maskStr] = cidr.split('/');
+        const mask = parseInt(maskStr);
+        if (mask < 0 || mask > 32) return [ip];
+        if (mask === 32) return [ip];
+        // 限制展开数量，防止浏览器卡死（最大 /16 = 65536个）
+        if (mask < 16) {
+            const hostBits = 32 - mask;
+            const network = (ipToLong(ip) >>> hostBits) << hostBits;
+            // 只取前65536个
+            const count = Math.min(1 << hostBits, 65536);
+            const list = [];
+            for (let i = 0; i < count; i++) {
+                list.push(longToIp((network + i) >>> 0));
+            }
+            return list;
+        }
+        const start = ipToLong(ip);
+        const hostBits = 32 - mask;
+        const network = (start >>> hostBits) << hostBits;
+        const broadcast = (network + ((1 << hostBits) - 1)) >>> 0;
+        const list = [];
+        for (let i = network >>> 0; i <= broadcast; i++) {
+            list.push(longToIp(i >>> 0));
+        }
+        return list;
+    }
+
+    // IPv6 工具
+    function expandIPv6Full(ip) {
+        // 去掉方括号
+        ip = ip.replace(/^\[|\]$/g, '');
+        // 处理 :: 简写
+        let parts = ip.split('::');
+        let head = parts[0] ? parts[0].split(':') : [];
+        let tail = parts.length > 1 ? (parts[1] ? parts[1].split(':') : []) : [];
+        if (parts.length === 1) {
+            // 没有 ::
+            while (head.length < 8) head.push('0');
+        } else {
+            const missing = 8 - head.length - tail.length;
+            const middle = Array(missing).fill('0');
+            head = head.concat(middle, tail);
+        }
+        return head.map(h => h.padStart(4, '0')).slice(0, 8);
+    }
+
+    function ipv6GroupsToString(groups) {
+        // 转为压缩格式
+        const full = groups.map(g => g.replace(/^0+/, '') || '0').join(':');
+        // 简化连续的 0 段
+        let best = '', bestLen = 0, cur = '', curLen = 0, curStart = -1;
+        const segs = full.split(':');
+        let ranges = [];
+        let start = -1;
+        for (let i = 0; i < segs.length; i++) {
+            if (segs[i] === '0') {
+                if (start === -1) start = i;
+            } else {
+                if (start !== -1) {
+                    ranges.push({ start, len: i - start });
+                    start = -1;
+                }
+            }
+        }
+        if (start !== -1) ranges.push({ start, len: segs.length - start });
+        // 找最长连续0段
+        let longest = null;
+        for (const r of ranges) {
+            if (r.len > 1 && (!longest || r.len > longest.len)) longest = r;
+        }
+        if (longest) {
+            const before = segs.slice(0, longest.start).join(':');
+            const after = segs.slice(longest.start + longest.len).join(':');
+            return (before ? before : '') + '::' + (after ? after : '');
+        }
+        return segs.join(':');
+    }
+
+    function expandIPv6CIDR(cidr) {
+        // 去掉方括号如果有
+        cidr = cidr.replace(/^\[/, '').replace(/\]\//, '/');
+        const [ip, maskStr] = cidr.split('/');
+        const mask = parseInt(maskStr);
+        if (mask < 0 || mask > 128) return [ip];
+        if (mask === 128) return [ip.replace(/^\[|\]$/g, '')];
+
+        const groups = expandIPv6Full(ip);
+        // 转为 BigInt 表示的128位数值
+        let addr = BigInt(0);
+        for (let i = 0; i < 8; i++) {
+            addr = (addr << BigInt(16)) | BigInt(parseInt(groups[i], 16));
+        }
+
+        const hostBits = 128 - mask;
+        // 限制展开数量，防止浏览器卡死（最大65536个）
+        const maxExpand = BigInt(65536);
+        const totalIPs = BigInt(1) << BigInt(hostBits);
+        const count = totalIPs < maxExpand ? totalIPs : maxExpand;
+
+        // 计算网络地址
+        const networkMask = hostBits === 128 ? BigInt(0) : ((BigInt(1) << BigInt(128)) - BigInt(1)) ^ ((BigInt(1) << BigInt(hostBits)) - BigInt(1));
+        const network = addr & networkMask;
+
+        const list = [];
+        for (let i = BigInt(0); i < count; i++) {
+            const current = network + i;
+            const g = [];
+            let tmp = current;
+            for (let j = 7; j >= 0; j--) {
+                g[j] = (tmp & BigInt(0xFFFF)).toString(16).padStart(4, '0');
+                tmp = tmp >> BigInt(16);
+            }
+            list.push(ipv6GroupsToString(g));
+        }
+        return list;
+    }
+
+    // ==================== 地址识别与解析 ====================
+
+    function isIPv4(str) {
+        return /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(str);
+    }
+
+    function isIPv6(str) {
+        // 去掉方括号后判断
+        const clean = str.replace(/^\[|\]$/g, '');
+        return /^[0-9a-fA-F:]+$/.test(clean) && clean.includes(':');
+    }
+
+    function isIPv4CIDR(str) {
+        return /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/.test(str);
+    }
+
+    function isIPv6CIDR(str) {
+        // 支持 2001:db8::/32 或 [2001:db8::]/32
+        const clean = str.replace(/^\[/, '').replace(/\]\//, '/');
+        return /^[0-9a-fA-F:]+\/\d{1,3}$/.test(clean) && clean.includes(':');
+    }
+
+    function isDomain(str) {
+        // 非IP、非CIDR、包含.、不含空格
+        return /^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$/.test(str);
+    }
+
+    /**
+     * 解析cdniplist中的一行，返回 { host, port, remark } 对象
+     * host: 纯IPv4、纯IPv6(不含方括号)、域名
+     * port: 数字或null（表示不替换端口）
+     * remark: 备注字符串或null（用于替换节点别名）
+     *
+     * 支持格式:
+     *   1.2.3.4
+     *   1.2.3.4:8443
+     *   1.2.3.4#备注
+     *   1.2.3.4:8443#备注
+     *   1.2.3.0/24#备注
+     *   [2606:4700::]:443#备注
+     *   [2606:4700::]#备注
+     *   2606:4700::#备注
+     *   2606:4700::/48#备注
+     *   cdn.example.com#备注
+     *   cdn.example.com:8443#备注
+     */
+    function parseTargetEntry(raw) {
+        raw = raw.trim();
+        if (!raw) return null;
+
+        // 提取 #备注 部分
+        let remark = null;
+        const hashIndex = raw.indexOf('#');
+        if (hashIndex !== -1) {
+            remark = raw.substring(hashIndex + 1).trim() || null;
+            raw = raw.substring(0, hashIndex).trim();
+        }
+        if (!raw) return null;
+
+        // IPv4 CIDR
+        if (isIPv4CIDR(raw)) {
+            return { type: 'ipv4-cidr', value: raw, remark };
+        }
+
+        // IPv6 CIDR (with or without brackets)
+        if (isIPv6CIDR(raw)) {
+            return { type: 'ipv6-cidr', value: raw, remark };
+        }
+
+        // Bracketed IPv6 with port: [::1]:443
+        const bracketPortMatch = raw.match(/^\[([^\]]+)\]:(\d+)$/);
+        if (bracketPortMatch) {
+            return { type: 'target', host: bracketPortMatch[1], port: parseInt(bracketPortMatch[2]), isIPv6: true, remark };
+        }
+
+        // Bracketed IPv6 without port: [::1]
+        const bracketMatch = raw.match(/^\[([^\]]+)\]$/);
+        if (bracketMatch) {
+            return { type: 'target', host: bracketMatch[1], port: null, isIPv6: true, remark };
+        }
+
+        // IPv4 with port: 1.2.3.4:443
+        const ipv4PortMatch = raw.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d+)$/);
+        if (ipv4PortMatch) {
+            return { type: 'target', host: ipv4PortMatch[1], port: parseInt(ipv4PortMatch[2]), isIPv6: false, remark };
+        }
+
+        // Plain IPv4
+        if (isIPv4(raw)) {
+            return { type: 'target', host: raw, port: null, isIPv6: false, remark };
+        }
+
+        // Raw IPv6 (without brackets, no port possible in this format)
+        if (isIPv6(raw)) {
+            return { type: 'target', host: raw, port: null, isIPv6: true, remark };
+        }
+
+        // Domain with port: cdn.example.com:443
+        const domainPortMatch = raw.match(/^([^:]+):(\d+)$/);
+        if (domainPortMatch && isDomain(domainPortMatch[1])) {
+            return { type: 'target', host: domainPortMatch[1], port: parseInt(domainPortMatch[2]), isIPv6: false, remark };
+        }
+
+        // Plain domain
+        if (isDomain(raw)) {
+            return { type: 'target', host: raw, port: null, isIPv6: false, remark };
+        }
+
+        // 无法识别，当作普通字符串使用
+        return { type: 'target', host: raw, port: null, isIPv6: false, remark };
+    }
+
+    /**
+     * 展开cdniplist输入，返回 [{host, port, isIPv6, remark}] 数组
+     */
+    function expandTargetList(rawList) {
+        const result = [];
+        for (const raw of rawList) {
+            const entry = parseTargetEntry(raw);
+            if (!entry) continue;
+
+            if (entry.type === 'ipv4-cidr') {
+                const ips = expandIPv4CIDR(entry.value);
+                for (const ip of ips) {
+                    result.push({ host: ip, port: null, isIPv6: false, remark: entry.remark });
+                }
+            } else if (entry.type === 'ipv6-cidr') {
+                const ips = expandIPv6CIDR(entry.value);
+                for (const ip of ips) {
+                    result.push({ host: ip, port: null, isIPv6: true, remark: entry.remark });
+                }
+            } else {
+                result.push({ host: entry.host, port: entry.port, isIPv6: entry.isIPv6, remark: entry.remark });
+            }
+        }
+        return result;
+    }
+
+    // ==================== 节点替换逻辑 ====================
+
+    /**
+     * 格式化host用于节点链接
+     * IPv6需要加方括号
+     */
+    function formatHost(target) {
+        if (target.isIPv6) {
+            return '[' + target.host + ']';
+        }
+        return target.host;
+    }
+
+    /**
+     * 替换 vless:// 或 trojan:// 节点的host、port和别名
+     */
+    function replaceVlessTrojanNode(node, target) {
+        const formattedHost = formatHost(target);
+
+        // 替换 host 部分: @host: 或 @[ipv6]:
+        let replaced = node.replace(/@(\[[^\]]+\]|[^:@\[\]]+):(\d+)/, function(match, oldHost, oldPort) {
+            const newPort = target.port !== null ? target.port : oldPort;
+            return '@' + formattedHost + ':' + newPort;
+        });
+
+        // 如果有remark，替换节点别名（#fragment部分）
+        if (target.remark) {
+            const fragIdx = replaced.indexOf('#');
+            if (fragIdx !== -1) {
+                replaced = replaced.substring(0, fragIdx) + '#' + encodeURIComponent(target.remark);
+            } else {
+                replaced = replaced + '#' + encodeURIComponent(target.remark);
+            }
+        }
+
+        return replaced;
+    }
+
+    /**
+     * 替换 ss:// 节点的host、port和别名
+     */
+    function replaceSsNode(node, target) {
+        const formattedHost = formatHost(target);
+
+        try {
+            // ss:// 格式: ss://base64(method:password)@host:port#name
+            // 或者: ss://base64(method:password@host:port)#name
+            const hashIndex = node.indexOf('#');
+            let fragment = hashIndex !== -1 ? node.substring(hashIndex) : '';
+            const mainPart = hashIndex !== -1 ? node.substring(5, hashIndex) : node.substring(5);
+
+            // 如果有remark，替换别名
+            if (target.remark) {
+                fragment = '#' + encodeURIComponent(target.remark);
+            }
+
+            // 检查是否有 @ 符号（未编码格式）
+            const atIndex = mainPart.indexOf('@');
+            if (atIndex !== -1) {
+                const credentials = mainPart.substring(0, atIndex);
+                const afterAt = mainPart.substring(atIndex + 1);
+                let oldPort;
+                if (afterAt.startsWith('[')) {
+                    const bracketEnd = afterAt.indexOf(']');
+                    oldPort = afterAt.substring(bracketEnd + 2);
+                } else {
+                    const colonIdx = afterAt.lastIndexOf(':');
+                    oldPort = afterAt.substring(colonIdx + 1);
+                }
+                const newPort = target.port !== null ? target.port : parseInt(oldPort);
+                return 'ss://' + credentials + '@' + formattedHost + ':' + newPort + fragment;
+            } else {
+                // 全部base64编码的格式，尝试解码
+                let decoded;
+                try {
+                    decoded = atob(mainPart);
+                } catch (e) {
+                    decoded = atob(mainPart.replace(/-/g, '+').replace(/_/g, '/'));
+                }
+                const dAtIndex = decoded.indexOf('@');
+                if (dAtIndex !== -1) {
+                    const dCredentials = decoded.substring(0, dAtIndex);
+                    const dAfterAt = decoded.substring(dAtIndex + 1);
+                    let oldPort;
+                    if (dAfterAt.startsWith('[')) {
+                        const bracketEnd = dAfterAt.indexOf(']');
+                        oldPort = dAfterAt.substring(bracketEnd + 2);
+                    } else {
+                        const colonIdx = dAfterAt.lastIndexOf(':');
+                        oldPort = dAfterAt.substring(colonIdx + 1);
+                    }
+                    const newPort = target.port !== null ? target.port : parseInt(oldPort);
+                    const newDecoded = dCredentials + '@' + formattedHost + ':' + newPort;
+                    return 'ss://' + btoa(newDecoded) + fragment;
+                } else {
+                    const newDecoded = decoded + '@' + formattedHost + ':' + (target.port || 443);
+                    return 'ss://' + btoa(newDecoded) + fragment;
+                }
+            }
+        } catch (e) {
+            // fallback: 简单正则替换
+            let result = node.replace(/@(\[[^\]]+\]|[^:@\[\]]+):(\d+)/, function(match, oldHost, oldPort) {
+                const newPort = target.port !== null ? target.port : oldPort;
+                return '@' + formattedHost + ':' + newPort;
+            });
+            if (target.remark) {
+                const fi = result.indexOf('#');
+                if (fi !== -1) {
+                    result = result.substring(0, fi) + '#' + encodeURIComponent(target.remark);
+                } else {
+                    result = result + '#' + encodeURIComponent(target.remark);
+                }
+            }
+            return result;
+        }
+    }
+
+    // ==================== 主执行函数 ====================
+
+    async function exec() {
+        const nodes_num = parseInt($("#num").val());
+        const getmethod = $("#getmethod").val();
+        const out = $("#out");
+        const processBtn = $("#processBtn");
+
+        let sample_node_raw = $("#in").val().trim();
+        let sample_nodes = sample_node_raw.split(/\r?\n/).filter(Boolean);
+
+        const supportedPrefixes = ["vless://", "trojan://", "ss://"];
+
+        if (!sample_nodes.some(node => supportedPrefixes.some(prefix => node.startsWith(prefix)))) {
+            $("#err").html("请检查输入的节点链接格式，支持 vless、trojan、ss 协议！").show();
+            return;
+        }
+
+        processBtn.html('<svg class="loading-spinner" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> 正在处理...').prop('disabled', true);
+        
+        try {
+            // 检查是否启用自动筛选
+            const filterIP = $("#filterIP").is(":checked");
+            if (filterIP) {
+                const extractedHosts = new Set();
+                for (let node of sample_nodes) {
+                    if (node.startsWith("vless://") || node.startsWith("trojan://")) {
+                        // 匹配 @host: 或 @[ipv6]:
+                        const hostMatch = node.match(/@(\[[^\]]+\]|[^:@\[\]]+):/);
+                        if (hostMatch) {
+                            extractedHosts.add(hostMatch[1]);
+                        }
+                    } else if (node.startsWith("ss://")) {
+                        try {
+                            const hashIdx = node.indexOf('#');
+                            const mainPart = hashIdx !== -1 ? node.substring(5, hashIdx) : node.substring(5);
+                            const atIdx = mainPart.indexOf('@');
+                            if (atIdx !== -1) {
+                                const afterAt = mainPart.substring(atIdx + 1);
+                                let host;
+                                if (afterAt.startsWith('[')) {
+                                    const bEnd = afterAt.indexOf(']');
+                                    host = afterAt.substring(0, bEnd + 1);
+                                } else {
+                                    const cIdx = afterAt.lastIndexOf(':');
+                                    host = afterAt.substring(0, cIdx);
+                                }
+                                if (host) extractedHosts.add(host);
+                            }
+                        } catch (e) {}
+                    }
+                }
+
+                if (extractedHosts.size > 0) {
+                    $("#cdniplist").val(Array.from(extractedHosts).join('\n'));
+                } else {
+                    throw new Error("未能从原始节点中提取到有效的地址！");
+                }
+            }
+            
+            const rawLines = $("#cdniplist").val().trim().split(/\s*[\r\n]+\s*/);
+            
+            if (rawLines.length === 0 || (rawLines.length === 1 && !rawLines[0])) {
+                throw new Error("请输入目标地址列表！");
+            }
+
+            // 展开所有目标（含CIDR展开）
+            let targets = expandTargetList(rawLines);
+            if (targets.length === 0) {
+                throw new Error("展开后的目标列表为空，请检查输入！");
+            }
+
+            // 去重（基于 host+port 组合）
+            const seen = new Set();
+            targets = targets.filter(t => {
+                const key = t.host + ':' + (t.port || '');
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+
+            // 根据获取方式和数量选择目标
+            let selectedTargets = [];
+            if (getmethod === 'random') {
+                for (let i = 0; i < nodes_num && i < targets.length * sample_nodes.length; i++) {
+                    const idx = Math.floor(Math.random() * targets.length);
+                    selectedTargets.push(targets[idx]);
+                }
+                // 去重
+                const seen2 = new Set();
+                selectedTargets = selectedTargets.filter(t => {
+                    const key = t.host + ':' + (t.port || '');
+                    if (seen2.has(key)) return false;
+                    seen2.add(key);
+                    return true;
+                });
+            } else {
+                // 顺序模式：取前N个
+                selectedTargets = targets.slice(0, nodes_num);
+            }
+
+            if (selectedTargets.length === 0) {
+                throw new Error("未获取到有效的目标地址！");
+            }
+
+            // 生成替换节点
+            let nodes = [];
+            for (let sample_node of sample_nodes) {
+                if (!supportedPrefixes.some(prefix => sample_node.startsWith(prefix))) continue;
+
+                for (const target of selectedTargets) {
+                    try {
+                        let newNode;
+                        if (sample_node.startsWith("vless://") || sample_node.startsWith("trojan://")) {
+                            newNode = replaceVlessTrojanNode(sample_node, target);
+                        } else if (sample_node.startsWith("ss://")) {
+                            newNode = replaceSsNode(sample_node, target);
+                        }
+                        if (newNode) nodes.push(newNode);
+                    } catch (e) {
+                        // 跳过单个替换错误
+                        console.warn('替换失败:', e.message);
+                    }
+                }
+            }
+
+            if (nodes.length === 0) {
+                throw new Error("未生成任何有效节点，请检查输入！");
+            }
+
+            out.val(nodes.join('\n'));
+        } catch (error) {
+            $("#err").html(error.message).show();
+        } finally {
+            processBtn.html('开始处理').prop('disabled', false);
+        }
+    }
+
+    // 自动提取IP/域名并填入目标列表
+    function autoExtractIPs() {
+        let sample_node_raw = $("#in").val().trim();
+        let sample_nodes = sample_node_raw.split(/\r?\n/).filter(Boolean);
+
+        const extractedHosts = new Set();
+        for (let node of sample_nodes) {
+            if (node.startsWith("vless://") || node.startsWith("trojan://")) {
+                const hostMatch = node.match(/@(\[[^\]]+\]|[^:@\[\]]+):/);
+                if (hostMatch) {
+                    extractedHosts.add(hostMatch[1]);
+                }
+            } else if (node.startsWith("ss://")) {
+                try {
+                    const hashIdx = node.indexOf('#');
+                    const mainPart = hashIdx !== -1 ? node.substring(5, hashIdx) : node.substring(5);
+                    const atIdx = mainPart.indexOf('@');
+                    if (atIdx !== -1) {
+                        const afterAt = mainPart.substring(atIdx + 1);
+                        let host;
+                        if (afterAt.startsWith('[')) {
+                            const bEnd = afterAt.indexOf(']');
+                            host = afterAt.substring(0, bEnd + 1);
+                        } else {
+                            const cIdx = afterAt.lastIndexOf(':');
+                            host = afterAt.substring(0, cIdx);
+                        }
+                        if (host) extractedHosts.add(host);
+                    }
+                } catch (e) {}
+            }
+        }
+
+        if (extractedHosts.size > 0) {
+            $("#cdniplist").val(Array.from(extractedHosts).join('\n'));
+        } else {
+            $("#cdniplist").val("");
+        }
+    }
+
+    $(document).ready(function() {
+        $('#filterIP').on('change', function() {
+            if (this.checked) {
+                autoExtractIPs();
+            } else {
+                $('#cdniplist').val('');
+            }
+        });
+        $('#in').on('input', function() {
+            if ($('#filterIP').is(':checked')) {
+                autoExtractIPs();
+            }
+        });
+    });
+    </script>
+</body>
+</html>
