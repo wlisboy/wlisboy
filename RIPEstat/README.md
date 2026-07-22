@@ -9,8 +9,8 @@
 
 ## 使用方式
 ```
-RIPEstat.exe -4 -t 20260722 -a 906 -o as906_v4.csv
-RIPEstat.exe -6 -t 20260722 -a 906 -o as906_v6.csv
+RIPEstat.exe -4 -t 20260722 -a 906 -o result.csv
+RIPEstat.exe -6 -t 20260722 -a 906 -o result.csv
 ```
 ## 致谢
 [RIPEstat](https://stat.ripe.net)
