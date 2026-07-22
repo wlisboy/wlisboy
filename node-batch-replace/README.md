@@ -27,4 +27,4 @@
 
 ## 致谢
 
-感谢 [LINUXDO](https://linux.do)
+[LINUXDO](https://linux.do)
