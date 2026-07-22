@@ -1,13 +1,16 @@
-使用方式
-```
-# 参数
--a , --asn      目标自治系统号 (ASN)
--4, --ipv4      仅获取 IPv4 Prefix
--6, --ipv6      仅获取 IPv6 Prefix
--t , --time     过滤的起始日期 (例如: 20260701)
--o , --output   输出本地 CSV 的文件名 (例如: result.csv)
+## 运行参数
+| 参数 | 长参数 | 类型 | 必选 | 说明 |
+|------|--------|------|------|------|
+| `-4` | `--ipv4` | flag | 二选一 | 查询 IPv4 Prefix |
+| `-6` | `--ipv6` | flag | 二选一 | 查询 IPv6 Prefix |
+| `-a` | `--asn` | int | ✓ | 目标 ASN（如 `906`） |
+| `-t` | `--time` | str | ✓ | 目标日期（如 `20260722`） |
+| `-o` | `--output` | str | ✓ | 输出 CSV 文件名（如 `result.csv`） |
 
-# 示例  
-py RIPEstat.py -a 906 -4 -t 20260701 -o result.csv
-py RIPEstat.py -a 906 -6 -t 20260701 -o result.csv
+## 使用方式
 ```
+RIPEstat.exe -4 -t 20260722 -a 906 -o as906_v4.csv
+RIPEstat.exe -6 -t 20260722 -a 906 -o as906_v6.csv
+```
+## 致谢
+[RIPEstat](https://stat.ripe.net)
