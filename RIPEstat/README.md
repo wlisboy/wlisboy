@@ -7,10 +7,5 @@
 | `-t` | `--time` | str | ✓ | 目标日期（如 `20260722`） |
 | `-o` | `--output` | str | ✓ | 输出 CSV 文件名（如 `result.csv`） |
 
-## 使用方式
-```
-RIPEstat.exe -4 -t 20260722 -a 906 -o result.csv
-RIPEstat.exe -6 -t 20260722 -a 906 -o result.csv
-```
 ## 致谢
 [RIPEstat](https://stat.ripe.net)
