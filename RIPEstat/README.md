@@ -7,5 +7,11 @@
 | `-t` / `--time` | ✓ | 目标日期（如 `20260722`） |
 | `-o` / `--output` | ✓ | 输出 CSV 文件名（如 `result.csv`） |
 
+## 如何运行
+
+```
+RIPEstat.exe -h
+```
+
 ## 致谢
 [RIPEstat](https://stat.ripe.net)
