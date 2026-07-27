@@ -12,7 +12,7 @@
 | `-ht` / `--timeout-hop` | 500 | tracert 单跳超时（毫秒） |
 | `-tt` / `--timeout-total` | 60000 | tracert 单目标总超时（毫秒） |
 
-## 如何运行
+## 使用方法
 
 ```
 trace.exe -h
