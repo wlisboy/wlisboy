@@ -8,7 +8,7 @@
 | `-u` / `--url` | `https://speed.cloudflare.com/__down?bytes=99999999` | 下载测速地址 |
 | `-n` / `--num` | 200 | 数据过滤并发 workers |
 | `-w` / `--worker` | 16 | tracert 匹配、数据筛选、延迟测速并发 workers  |
-| `-m` / `--max-hops` | 8 | tracert 最大跳数；触发重试放宽至 25 |
+| `-m` / `--max-hops` | 12 | tracert 最大跳数；触发重试放宽至 25 |
 | `-me` / `--max-empty` | 8 | tracert 连续无响应跳数上限 |
 | `-ht` / `--timeout-hop` | 500 | tracert 单跳超时（毫秒）；触发重试放宽至 1000 |
 | `-tt` / `--timeout-total` | 60000 | tracert 单目标总超时（毫秒）；触发重试放宽至 90000 |
