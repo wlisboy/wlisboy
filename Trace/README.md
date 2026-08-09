@@ -37,13 +37,13 @@ trace.exe -h
 ## 项目结构
 
 ```
-Trace/
-├── trace.exe              # 单文件可执行程序
-├── main.exe               # Go 后端：并发 tracert、ASN 匹配、测速
+├── trace.exe              # 单文件主程序
+├── tracedata.exe          # Trace 数据更新
+├── main.exe               # Go 后端：并发 数据过滤、tracert 匹配、数据筛选、延迟测速、下载测速、ProxyIP 检测、风险检测、数据整理
 └── data/
-    ├── asn_prefixes.json      # ASN 路由前缀
-    ├── locations.json         # 地区/城市/国家代码
-    └── GeoLite2-ASN.mmdb      # ASN/组织 离线数据库
+    ├── asn_prefixes.json      # RIPEStat → 线路识别
+    ├── locations.json         # 白嫖哥 → Cloudflare 数据中心位置
+    └── GeoLite2-ASN.mmdb      # MaxMind → ASN 数据库
 ```
 ## 致谢（以下排名不分先后）
 
