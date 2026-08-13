@@ -55,3 +55,4 @@ trace.exe -h
   
 - [CFData-WEB](https://github.com/PoemMisty/CFData-WEB)
 
+- [NTrace-core](https://github.com/nxtrace/NTrace-core)
