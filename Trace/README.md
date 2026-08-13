@@ -16,13 +16,17 @@
 ## 使用方法
 
 ```
+netsh advfirewall firewall add rule name="All ICMP v4" dir=in action=allow protocol=icmpv4:any,any
+
+netsh advfirewall firewall add rule name="All ICMP v6" dir=in action=allow protocol=icmpv6:any,any
+
 trace.exe -h
 ```
-
 ## 线路识别
 
 | 特征 ASN | 运营商 | 线路类型 |
-|----------|--------|----------|
+|----------|--------|----------
+| AS2914 | 日本电信 | NTT |
 | AS4134 | 中国电信 | 163骨干 |
 | AS4812 | 中国电信 | CN2 |
 | AS4809 | 中国电信 | CN2 GIA/GT |
