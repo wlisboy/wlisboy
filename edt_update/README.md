@@ -7,7 +7,7 @@
 
 1. 部署 CF Pages：
    - 下载 [edt_update.exe](https://raw.githubusercontent.com/wlisboy/wlisboy/main/edt_update/edt_update.exe) 文件，并点上 Star !!!
-   - 在软件界面选择对应的版本 **(新手推荐: 稳定版)**
+   - 在`edt_upodate.exe` 界面选择对应的版本 **(推荐: 稳定版)**
    - 在 CF Pages 控制台中选择 `上传资产`后，为你的项目 **取名** 后点击 `创建项目`，然后上传你下载好的`Pages.zip`文件后点击 `部署站点`。
    - 部署完成后点击 `继续处理站点` 后，选择 `设置` > `环境变量` > **制作**为生产环境定义变量 > `添加变量`。
      变量名称填写**ADMIN**，值则为你的管理员密码，后点击 `保存`即可。
@@ -25,6 +25,12 @@
    
 4. 访问后台：
    - 访问 `https://lizi.fuck.cloudns.biz/admin` 输入管理员密码即可登录后台。
+
+5. 更新 CF Pages：
+   - 在`edt_upodate.exe` 界面选择对应的版本 **(推荐: 稳定版)**
+   - 找到之前部署的项目 → 点进去 → 右上角找到`创建部署`
+     或者访问 `https://dash.cloudflare.com/Your Account ID/pages/view/你的项目名` → 右上角找到`创建部署`
+   - 在 CF Pages 控制台中选择 `上传资产`后，然后上传你下载好的`Pages.zip`文件后点击 `部署站点`。
 
 </details>
 
