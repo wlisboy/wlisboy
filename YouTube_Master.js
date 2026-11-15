@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         YouTube 优化大师
 // @namespace    https://t.me/CMLiussss
-// @version      0.7.9
-// @description  YouTube 视频体验增强：跳过按钮+seekTo+10s冷却，无hooks无循环。含画质/布局/年龄/倒赞等功能。
-// @author       CMLiussss
+// @version      0.8.4
+// @description  YouTube 视频体验增强：秒跳广告（点击/seek/重载三段式）、检测弹窗兜底、防AI配音、SponsorBlock赞助片段跳过、暂停确认消除，含画质/静音/年龄/倒赞等功能。无hooks无循环。
+// @author       CMLiussss & wlisboy
 // @icon         https://raw.cmliussss.net/favicon.ico
 // @match        https://www.youtube.com/*
 // @match        https://m.youtube.com/*
@@ -23,13 +23,14 @@
     const 样式成功 = 'color:#51cf66;font-weight:bold;';
     const 样式警告 = 'color:#ffa94d;font-weight:bold;';
     const 样式错误 = 'color:#ff6b6b;font-weight:bold;';
+    const 脚本版本号 = '0.8.4'; // 当前脚本版本（更新检查与面板版本行共用，改版本号只需改头部+这里）
     let 调试模式启用 = false;
     function logInfo() { if (!调试模式启用) return; console.log(日志标签, 样式信息, ...arguments); }
     function logOk() { console.log(日志标签, 样式成功, ...arguments); }
     function logWarn() { console.warn(日志标签, 样式警告, ...arguments); }
     function logError() { console.error(日志标签, 样式错误, ...arguments); }
 
-    logOk('v0.7.9 脚本已注入 →', location.href);
+    logOk('v' + 脚本版本号 + ' 脚本已注入 →', location.href);
 
     // ===== Trusted Types 兼容 =====
     // YouTube 启用了 CSP「require-trusted-types-for 'script'」，所有 innerHTML 赋值
@@ -74,12 +75,24 @@
         网速单位转换: true,
         倒赞比例条: true,
         预测倒赞数据: true,
-        // ---- 广告过滤细粒度开关（5 项，默认全开） ----
+        // ---- 广告过滤细粒度开关（8 项，默认全开） ----
         强显跳过按钮: true, // 🖱️ 强制显示隐藏的跳过按钮（让可跳过广告不被倒计时遮挡）
+        秒跳广告: true, // ⏭️ 自动跳过广告：点击跳过按钮 → seek 广告结尾 → 重载正片，三段式逐级尝试
         广告时段静音: true, // 🔇 广告播放时自动静音
         广告横幅移除: true, // 🧹 移除页面上的广告横幅 / 商品推荐 / 信息流广告（DOM 删除）
+        检测弹窗处理: true, // 🛡️ 自动关闭「检测到广告拦截器」弹窗并恢复播放
         年龄限制绕过: true, // 🔞 绕过年龄验证弹窗
         自动恢复播放: true, // ▶️ 广告暂停视频后自动恢复播放
+        跳过赞助片段: true, // 📦 用 SponsorBlock 社区数据自动跳过片内赞助 / 自主推广片段
+        // ---- 播放体验开关 ----
+        防自动配音: true, // 🗣️ 强制原始语言音轨，拒绝 AI 自动配音
+        暂停确认消除: true, // ⏸️ 自动确认「视频已暂停。是否继续观看？」/「仍在观看？」
+        界面主题: 'dark', // 🎨 统计面板主题：dark 深色 / light 浅色 / auto 跟随设备深浅色
+        // ---- 播放增强 ----
+        长按倍速: true, // ⏩ 按住 Z 键临时 2 倍速，松开恢复（B站同款交互）
+        自动中文字幕: true, // 🈶 有字幕的视频自动开启 CC 并翻译为中文
+        隐藏付费推广: true, // 🏷️ 隐藏播放器「含付费推广」角标（CSS 隐藏，不动 DOM）
+        新标签页打开: false, // 🔗 点击视频链接强制新标签页打开（改变浏览习惯，默认关）
         调试模式: false
     };
 
@@ -98,15 +111,23 @@
             if (typeof 存档.网速单位转换 === 'boolean') 选项.网速单位转换 = 存档.网速单位转换;
             if (typeof 存档.倒赞比例条 === 'boolean') 选项.倒赞比例条 = 存档.倒赞比例条;
             if (typeof 存档.预测倒赞数据 === 'boolean') 选项.预测倒赞数据 = 存档.预测倒赞数据;
+            if (typeof 存档.防自动配音 === 'boolean') 选项.防自动配音 = 存档.防自动配音;
+            if (typeof 存档.暂停确认消除 === 'boolean') 选项.暂停确认消除 = 存档.暂停确认消除;
+            if (typeof 存档.界面主题 === 'string' && ['dark', 'light', 'auto'].includes(存档.界面主题)) 选项.界面主题 = 存档.界面主题;
+            if (typeof 存档.长按倍速 === 'boolean') 选项.长按倍速 = 存档.长按倍速;
+            if (typeof 存档.自动中文字幕 === 'boolean') 选项.自动中文字幕 = 存档.自动中文字幕;
+            if (typeof 存档.隐藏付费推广 === 'boolean') 选项.隐藏付费推广 = 存档.隐藏付费推广;
+            if (typeof 存档.新标签页打开 === 'boolean') 选项.新标签页打开 = 存档.新标签页打开;
             if (typeof 存档.调试模式 === 'boolean') 选项.调试模式 = 存档.调试模式;
 
-            // ---- 广告过滤细粒度开关：直接读取 5 项 boolean ----
-            // 5 项 key 集中在此数组，方便与「迁移」分支统一处理
+            // ---- 广告过滤细粒度开关：直接读取 boolean ----
+            // 各项 key 集中在此数组，方便与「迁移」分支统一处理
             const 广告开关键表 = [
-                '强显跳过按钮',
+                '强显跳过按钮', '秒跳广告',
                 '广告时段静音',
-                '广告横幅移除',
-                '年龄限制绕过', '自动恢复播放'
+                '广告横幅移除', '检测弹窗处理',
+                '年龄限制绕过', '自动恢复播放',
+                '跳过赞助片段'
             ];
             const 已迁移到细粒度 = 广告开关键表.some(k => typeof 存档[k] === 'boolean');
             if (已迁移到细粒度) {
@@ -137,9 +158,10 @@
     // 各过滤函数内部已自行检查对应开关，无需在主循环层面统一门控。
     // 所有 5 项全关时才停止播放器观察器。
     function 视频广告处理启用() {
-        return 选项.强显跳过按钮 || 选项.广告时段静音
-            || 选项.广告横幅移除
-            || 选项.年龄限制绕过 || 选项.自动恢复播放;
+        return 选项.强显跳过按钮 || 选项.秒跳广告 || 选项.广告时段静音
+            || 选项.广告横幅移除 || 选项.检测弹窗处理
+            || 选项.年龄限制绕过 || 选项.自动恢复播放
+            || 选项.跳过赞助片段;
     }
 
     // 反检测：不隐藏广告 slot。YouTube 会注入广告元素并用 getComputedStyle /
@@ -170,14 +192,31 @@
     let 广告静音恢复定时器 = null; // 延迟确认恢复音量的定时器（防止广告中间 class 抖动误恢复）
     let 音量恢复保护定时器 = null; // 恢复音量后的短期保护定时器（防止 YouTube 播放器覆盖恢复值）
 
+    // ===== 秒跳广告 / 新策略状态 =====
+    let 秒跳已处理 = false; // 当前广告会话是否已成功跳过（广告结束才复位，防重复计数）
+    let 秒跳冷却至 = 0; // 秒跳动作冷却时间戳（跨过广告→正片的 class 过渡期）
+    let 秒跳点击次数 = 0; // 本会话点击跳过按钮的次数（连续无效则降级为 seek / 重载）
+    let 正片进度快照 = 0; // 非广告期间记录的正片播放位置，供「重载正片」跳法恢复进度
+    let 检测弹窗冷却至 = 0; // 检测弹窗处理冷却时间戳
+    let 年龄弹窗最近出现 = 0; // 最近一次发现年龄弹窗的时间（nocookie 兜底跳转的触发依据）
+    let 年龄卡住计数 = 0; // 视频卡在 0:00 的连续观察次数（连续多次才触发跳转）
+    let 已配音通知视频ID = null; // 已弹过「已恢复原始音轨」通知的视频 ID（防重复弹气泡）
+
+    // ===== 播放增强状态 =====
+    let 长按倍速已安装 = false; // 长按倍速键盘监听只安装一次
+    let 长按倍速原速 = null; // 按住 Z 期间记录的原播放速度（非 null 表示倍速生效中）
+    let 新标签页已安装 = false; // 新标签页打开点击监听只安装一次
+    let 中字幕处理视频ID = null; // 已处理过中文字幕的视频 ID（每个视频只处理一次）
+
     // ===== 拦截统计（持久化到 localStorage，刷新页面也不丢） =====
-    // 5 项广告过滤策略（每项限 6 字，策略名即代码标识，保持一致方便 UI 对齐）
+    // 8 项广告过滤策略（每项限 6 字，策略名即代码标识，保持一致方便 UI 对齐）
     // 计数会显示在该开关左侧。总数 = 各策略计数之和（动态求和，不单独存）。
     const 策略键表 = [
-        '强显跳过按钮',
+        '强显跳过按钮', '秒跳广告',
         '广告时段静音',
-        '广告横幅移除',
-        '年龄限制绕过', '自动恢复播放'
+        '广告横幅移除', '检测弹窗处理',
+        '年龄限制绕过', '自动恢复播放',
+        '跳过赞助片段'
     ];
     const 统计 = {};
     策略键表.forEach(k => { 统计[k] = 0; });
@@ -187,10 +226,23 @@
         return 策略键表.reduce((n, k) => n + (统计[k] || 0), 0);
     }
 
+    function 今日日期字符串() {
+        const d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
     function 加载统计() {
         try {
             const 存档 = JSON.parse(localStorage.getItem(存档键) || '{}');
             策略键表.forEach(k => { 统计[k] = Number.isFinite(存档[k]) ? 存档[k] : 0; });
+            // 今日拦截计数：跨天自动归零
+            const 今天 = 今日日期字符串();
+            if (存档.今日日期 === 今天 && Number.isFinite(存档.今日计数)) {
+                统计.今日计数 = 存档.今日计数;
+            } else {
+                统计.今日计数 = 0;
+            }
+            统计.今日日期 = 今天;
             logInfo('已加载历史统计:', { ...统计 });
         } catch (e) {
             logWarn('统计存档损坏，从 0 重新开始:', e);
@@ -206,6 +258,23 @@
     //   - YouTube 的 DOM 选择器（.ad-showing、#movie_player、ytd-... 等）
     //   - YouTube 播放器 API（getAvailableQualityLevels、setPlaybackQualityRange 等）
 
+    // ===== 界面主题（深色 / 浅色 / 跟随设备） =====
+    const 浅色媒体查询 = (window.matchMedia) ? window.matchMedia('(prefers-color-scheme: light)') : null;
+
+    function 取生效主题() {
+        if (选项.界面主题 === 'light') return 'light';
+        if (选项.界面主题 === 'auto') return (浅色媒体查询 && 浅色媒体查询.matches) ? 'light' : 'dark';
+        return 'dark';
+    }
+
+    // 把生效主题写到面板 / 通知堆栈的 data-ns-theme 属性上，注入的 CSS 变量随之换肤
+    function 应用界面主题() {
+        const 主题 = 取生效主题();
+        if (面板节点) 面板节点.dataset.nsTheme = 主题;
+        const 通知堆栈 = document.querySelector('.nextshield-notification-stack');
+        if (通知堆栈) 通知堆栈.dataset.nsTheme = 主题;
+    }
+
     // ===== 注入样式 =====
     function 应用增强样式() {
         if (document.querySelector('#nextshield-style')) return; // 幂等，避免重复注入
@@ -219,12 +288,45 @@
                 right: 28px; /* 与拖动/展开时的右侧边距保持一致，避免贴近浏览器右侧滚动条 */
                 z-index: 2147483647;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                color: #fff;
+                color: var(--ns-text);
                 user-select: none;
                 cursor: grab;
                 opacity: 0;
                 transform: translateY(20px);
                 transition: opacity .4s ease, transform .4s cubic-bezier(.18,.89,.32,1.28), left 0s, top 0s;
+                /* 主题变量：深色为默认，[data-ns-theme="light"] 时覆盖为浅色 */
+                --ns-bg: rgba(15, 15, 20, .82);
+                --ns-bg-strong: rgba(15, 15, 20, .9);
+                --ns-border: rgba(255,255,255,.12);
+                --ns-hover: rgba(30, 30, 40, .9);
+                --ns-text: #fff;
+                --ns-success: #51cf66;
+                --ns-count-bg: rgba(81,207,102,.22);
+                --ns-zero-bg: rgba(255,255,255,.08);
+                --ns-zero-text: rgba(255,255,255,.35);
+                --ns-btn-bg: rgba(255,255,255,.08);
+                --ns-btn-hover: rgba(255,255,255,.18);
+                --ns-switch-track: rgba(255,255,255,.18);
+            }
+            .nextshield-stats[data-ns-theme="light"] {
+                --ns-bg: rgba(255, 255, 255, .93);
+                --ns-bg-strong: rgba(255, 255, 255, .97);
+                --ns-border: rgba(0, 0, 0, .12);
+                --ns-hover: rgba(233, 233, 239, .97); /* 悬停色必须近乎不透明：半透明色会让面板背后的页面内容透出来 */
+                --ns-text: #1f1f23;
+                --ns-success: #2f9e44;
+                --ns-count-bg: rgba(47, 158, 68, .15);
+                --ns-zero-bg: rgba(0, 0, 0, .06);
+                --ns-zero-text: rgba(0, 0, 0, .4);
+                --ns-btn-bg: rgba(0, 0, 0, .05);
+                --ns-btn-hover: rgba(0, 0, 0, .1);
+                --ns-switch-track: rgba(0, 0, 0, .22);
+            }
+            /* 浅色下玻璃模糊叠在白底上几乎不可见，补一层柔和投影保证面板可辨识 */
+            .nextshield-stats[data-ns-theme="light"] .ns-header,
+            .nextshield-stats[data-ns-theme="light"] .ns-body,
+            .nextshield-stats[data-ns-theme="light"].ns-dots::before {
+                box-shadow: 0 4px 18px rgba(0, 0, 0, .12);
             }
             .nextshield-stats.ns-ready { opacity: 1; transform: translateY(0); }
             /* 拖动中：关闭过渡动画（避免跟手卡顿），光标切换为「正在抓取」 */
@@ -244,8 +346,8 @@
                 align-items: center;
                 gap: 8px;
                 padding: 10px 16px;
-                background: rgba(15, 15, 20, .82);
-                border: 1px solid rgba(255,255,255,.12);
+                background: var(--ns-bg);
+                border: 1px solid var(--ns-border);
                 border-radius: 999px;
                 box-shadow: none;
                 backdrop-filter: blur(10px);
@@ -254,7 +356,7 @@
                 white-space: nowrap;
                 transition: background .25s ease, transform .5s ease;
             }
-            .ns-header:hover { background: rgba(30, 30, 40, .9); }
+            .ns-header:hover { background: var(--ns-hover); }
             .ns-shield { font-size: 16px; filter: drop-shadow(0 0 4px rgba(80,200,120,.8)); flex-shrink: 0; }
             .ns-total {
                 min-width: 18px;
@@ -264,7 +366,7 @@
                 flex-shrink: 0;
             }
             .ns-arrow { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; opacity: .6; transition: transform .25s ease; flex-shrink: 0; }
-            .ns-arrow svg { width: 16px; height: 16px; fill: none; stroke: #fff; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+            .ns-arrow svg { width: 16px; height: 16px; fill: none; stroke: var(--ns-text); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
             .nextshield-stats.ns-expanded .ns-arrow { transform: rotate(90deg); }
 
             /* 拦截计数 +1 时头部脉冲一下 */
@@ -278,14 +380,16 @@
             .ns-body {
                 margin-top: 8px;
                 padding: 12px 14px;
-                background: rgba(15, 15, 20, .9);
-                border: 1px solid rgba(255,255,255,.12);
+                background: var(--ns-bg-strong);
+                border: 1px solid var(--ns-border);
                 border-radius: 14px;
                 box-shadow:none;
                 backdrop-filter: blur(10px);
                 font-size: 12px;
                 font-weight: 500;
                 min-width: 190px;
+                max-height: calc(100vh - 140px); /* 全部分组展开也不超出视口，超出部分内部滚动 */
+                overflow-y: auto;
                 display: none;
             }
             .nextshield-stats.ns-expanded .ns-body { display: block; animation: nsFade .2s ease; }
@@ -299,14 +403,32 @@
                 padding: 5px 0;
                 opacity: .92;
             }
-            .ns-row b { font-weight: 700; font-variant-numeric: tabular-nums; color: #fff; }
-            .ns-row-status b { color: #51cf66; font-size: 11px; }
+            .ns-row b { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ns-text); }
+            .ns-row-status b { color: var(--ns-success); font-size: 11px; }
 
-            .ns-strategy {
+            /* 分组折叠：默认收起，点击组标题展开（状态持久化） */
+            .ns-group-head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
                 margin-top: 6px;
-                padding-top: 8px;
-                border-top: 1px solid rgba(255,255,255,.1);
+                padding: 6px 0;
+                cursor: pointer;
+                user-select: none;
+                font-weight: 700;
+                opacity: .95;
             }
+            .ns-group-head:hover { opacity: 1; }
+            .ns-group-arrow { display: inline-flex; transition: transform .2s ease; }
+            .ns-group-arrow svg { width: 14px; height: 14px; fill: none; stroke: var(--ns-text); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+            .ns-group.ns-open .ns-group-arrow { transform: rotate(90deg); }
+            .ns-group-body { display: none; }
+            .ns-group.ns-open .ns-group-body { display: block; }
+            .ns-body::-webkit-scrollbar { width: 6px; }
+            .ns-body::-webkit-scrollbar-thumb { background: rgba(128,128,128,.4); border-radius: 3px; }
+
+            .ns-strategy { padding-top: 2px; }
 
             /* 策略开关左侧的拦截计数徽标 */
             .ns-toggle-label { display: inline-flex; align-items: center; gap: 6px; }
@@ -314,8 +436,8 @@
                 min-width: 18px;
                 padding: 0 5px;
                 border-radius: 999px;
-                background: rgba(81,207,102,.22);
-                color: #51cf66;
+                background: var(--ns-count-bg);
+                color: var(--ns-success);
                 font-size: 10px;
                 font-weight: 700;
                 font-variant-numeric: tabular-nums;
@@ -324,14 +446,10 @@
                 flex-shrink: 0;
             }
             /* 计数为 0 时淡化，避免一堆 0 抢眼 */
-            .ns-count[data-zero] { background: rgba(255,255,255,.08); color: rgba(255,255,255,.35); }
+            .ns-count[data-zero] { background: var(--ns-zero-bg); color: var(--ns-zero-text); }
 
             /* 功能开关勾选项 */
-            .ns-toggles {
-                margin-top: 6px;
-                padding-top: 8px;
-                border-top: 1px solid rgba(255,255,255,.1);
-            }
+            .ns-toggles { padding-top: 2px; }
             .ns-toggle {
                 display: flex;
                 align-items: center;
@@ -347,7 +465,7 @@
                 position: relative;
                 width: 30px;
                 height: 16px;
-                background: rgba(255,255,255,.18);
+                background: var(--ns-switch-track);
                 border-radius: 999px;
                 transition: background .2s ease;
                 flex-shrink: 0;
@@ -365,21 +483,21 @@
             }
             .ns-toggle input:checked + .ns-toggle-switch { background: #51cf66; }
             .ns-toggle input:checked + .ns-toggle-switch::after { transform: translateX(14px); }
-            .ns-toggle-select .ns-quality-mode {
+            .ns-toggle-select select {
                 width: fit-content;
                 min-width: 0;
                 max-width: 100%;
                 height: 26px;
                 padding: 0 8px;
-                border: 1px solid rgba(255,255,255,.14);
+                border: 1px solid var(--ns-border);
                 border-radius: 8px;
-                background: rgba(255,255,255,.08);
-                color: #fff;
+                background: var(--ns-btn-bg);
+                color: var(--ns-text);
                 font-size: 11px;
                 outline: none;
                 cursor: pointer;
             }
-            .ns-toggle-select .ns-quality-mode option { color: #111; }
+            .ns-toggle-select select option { color: #111; }
 
             .ns-actions {
                 display: flex;
@@ -391,15 +509,15 @@
             .ns-actions button {
                 flex: 1;
                 padding: 5px 8px;
-                background: rgba(255,255,255,.08);
-                border: 1px solid rgba(255,255,255,.12);
+                background: var(--ns-btn-bg);
+                border: 1px solid var(--ns-border);
                 border-radius: 8px;
-                color: #fff;
+                color: var(--ns-text);
                 font-size: 11px;
                 cursor: pointer;
                 transition: background .2s ease;
             }
-            .ns-actions button:hover { background: rgba(255,255,255,.18); }
+            .ns-actions button:hover { background: var(--ns-btn-hover); }
 
             /* 最小化为一个小盾牌圆点，点击恢复 */
             .nextshield-stats.ns-dots .ns-header,
@@ -409,8 +527,8 @@
                 font-size: 18px;
                 display: block;
                 padding: 8px 10px;
-                background: rgba(15,15,20,.82);
-                border: 1px solid rgba(255,255,255,.12);
+                background: var(--ns-bg);
+                border: 1px solid var(--ns-border);
                 border-radius: 999px;
                 box-shadow: 0 6px 24px rgba(0,0,0,.45);
                 backdrop-filter: blur(10px);
@@ -448,6 +566,13 @@
                 pointer-events: none; /* 通知只是提示，不挡住下面的点击 */
             }
             .nextshield-notification.show { opacity: 1; transform: translateY(0) scale(1); }
+            /* 浅色页面下彩色胶囊加深投影，避免发灰看不清 */
+            .nextshield-notification-stack[data-ns-theme="light"] .nextshield-notification { box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+
+            /* 隐藏「含付费推广」角标（开关通过 html[data-ns-hide-promo] 属性控制，CSS 隐藏不动 DOM） */
+            html[data-ns-hide-promo] .ytp-paid-content-overlay { display: none !important; }
+            /* 版本行：发现新版本后可点击打开安装页 */
+            .ns-version[data-update] { cursor: pointer; color: #ffa94d; text-decoration: underline; }
             .nextshield-notification.ad-blocked { background: linear-gradient(135deg, rgba(176, 92, 92, .88) 0%, rgba(150, 74, 74, .88) 100%); }
             .nextshield-notification.success { background: linear-gradient(135deg, rgba(79, 152, 95, .88) 0%, rgba(61, 126, 76, .88) 100%); }
             .nextshield-notification.info { background: linear-gradient(135deg, rgba(56, 142, 180, .88) 0%, rgba(42, 115, 150, .88) 100%); }
@@ -662,6 +787,7 @@
                 logWarn('页面上已有统计面板（可能重复安装了本脚本），已直接接管，不再重建');
             }
             刷新面板();
+            应用界面主题();
             return true;
         }
         if (旧的) {
@@ -681,77 +807,149 @@
             </div>
             <div class="ns-body">
             <div class="ns-row ns-row-status"><span>📡 广告过滤策略</span><b class="ns-ad-count">未过滤</b></div>
-                <div class="ns-strategy">
-                    <label class="ns-toggle">
-                        <span class="ns-toggle-label">🖱️ 强显跳过按钮 <b class="ns-count" data-count="强显跳过按钮">0</b></span>
-                        <input type="checkbox" class="ns-toggle-ad-force-skip">
-                        <span class="ns-toggle-switch"></span>
-                    </label>
-                    <label class="ns-toggle">
-                        <span class="ns-toggle-label">🔇 广告时段静音 <b class="ns-count" data-count="广告时段静音">0</b></span>
-                        <input type="checkbox" class="ns-toggle-ad-mute">
-                        <span class="ns-toggle-switch"></span>
-                    </label>
-                    <label class="ns-toggle">
-                        <span class="ns-toggle-label">🧹 广告横幅移除 <b class="ns-count" data-count="广告横幅移除">0</b></span>
-                        <input type="checkbox" class="ns-toggle-ad-banner">
-                        <span class="ns-toggle-switch"></span>
-                    </label>
-                    <label class="ns-toggle">
-                        <span class="ns-toggle-label">🔞 年龄限制绕过 <b class="ns-count" data-count="年龄限制绕过">0</b></span>
-                        <input type="checkbox" class="ns-toggle-ad-age">
-                        <span class="ns-toggle-switch"></span>
-                    </label>
-                    <label class="ns-toggle">
-                        <span class="ns-toggle-label">▶️ 自动恢复播放 <b class="ns-count" data-count="自动恢复播放">0</b></span>
-                        <input type="checkbox" class="ns-toggle-ad-resume">
-                        <span class="ns-toggle-switch"></span>
-                    </label>
+                <div class="ns-row ns-row-status"><span>📅 今日拦截</span><b class="ns-today-count">0</b></div>
+                <div class="ns-row ns-row-status"><span>🔄 版本</span><b class="ns-version" title="发现新版本后点击打开安装页">0.8.4</b></div>
+                <div class="ns-group" data-group="广告拦截">
+                    <div class="ns-group-head"><span>🛡️ 广告拦截（8）</span><span class="ns-group-arrow"><svg viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg></span></div>
+                    <div class="ns-group-body">
+                        <div class="ns-strategy">
+                            <label class="ns-toggle">
+                                <span class="ns-toggle-label">🖱️ 强显跳过按钮 <b class="ns-count" data-count="强显跳过按钮">0</b></span>
+                                <input type="checkbox" class="ns-toggle-ad-force-skip">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle">
+                                <span class="ns-toggle-label">⏭️ 秒跳广告 <b class="ns-count" data-count="秒跳广告">0</b></span>
+                                <input type="checkbox" class="ns-toggle-ad-instant-skip">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle">
+                                <span class="ns-toggle-label">🔇 广告时段静音 <b class="ns-count" data-count="广告时段静音">0</b></span>
+                                <input type="checkbox" class="ns-toggle-ad-mute">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle">
+                                <span class="ns-toggle-label">🧹 广告横幅移除 <b class="ns-count" data-count="广告横幅移除">0</b></span>
+                                <input type="checkbox" class="ns-toggle-ad-banner">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle">
+                                <span class="ns-toggle-label">🛡️ 检测弹窗处理 <b class="ns-count" data-count="检测弹窗处理">0</b></span>
+                                <input type="checkbox" class="ns-toggle-ad-detect-dialog">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle">
+                                <span class="ns-toggle-label">🔞 年龄限制绕过 <b class="ns-count" data-count="年龄限制绕过">0</b></span>
+                                <input type="checkbox" class="ns-toggle-ad-age">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle">
+                                <span class="ns-toggle-label">▶️ 自动恢复播放 <b class="ns-count" data-count="自动恢复播放">0</b></span>
+                                <input type="checkbox" class="ns-toggle-ad-resume">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle">
+                                <span class="ns-toggle-label">📦 跳过赞助片段 <b class="ns-count" data-count="跳过赞助片段">0</b></span>
+                                <input type="checkbox" class="ns-toggle-ad-sponsor">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
-                <div class="ns-toggles">
-                    <label class="ns-toggle">
-                        <span>🌐 统计信息汉化</span>
-                        <input type="checkbox" class="ns-toggle-stats-i18n">
-                        <span class="ns-toggle-switch"></span>
-                    </label>
-                    <label class="ns-toggle">
-                        <span>📊 网速单位转换</span>
-                        <input type="checkbox" class="ns-toggle-speed-conv">
-                        <span class="ns-toggle-switch"></span>
-                    </label>
-                    <label class="ns-toggle">
-                        <span>👎 预测倒赞数据</span>
-                        <input type="checkbox" class="ns-toggle-dislike">
-                        <span class="ns-toggle-switch"></span>
-                    </label>
-                    <label class="ns-toggle">
-                        <span>📊 显示倒赞比例</span>
-                        <input type="checkbox" class="ns-toggle-ratebar">
-                        <span class="ns-toggle-switch"></span>
-                    </label>
-                    <label class="ns-toggle ns-toggle-select">
-                        <span>🎬 自动切换画质</span>
-                        <select class="ns-quality-mode">
-                            <option value="best">最高</option>
-                            <option value="1080p">1080p</option>
-                            <option value="off">关闭</option>
-                        </select>
-                    </label>
+                <div class="ns-group" data-group="播放增强">
+                    <div class="ns-group-head"><span>⚙️ 播放增强（7）</span><span class="ns-group-arrow"><svg viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg></span></div>
+                    <div class="ns-group-body">
+                        <div class="ns-toggles">
+                            <label class="ns-toggle">
+                                <span>🗣️ 原始语言音轨</span>
+                                <input type="checkbox" class="ns-toggle-original-audio">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle">
+                                <span>⏸️ 暂停确认消除</span>
+                                <input type="checkbox" class="ns-toggle-autopause">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle">
+                                <span>⏩ 长按倍速（Z 键）</span>
+                                <input type="checkbox" class="ns-toggle-hold-speed">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle">
+                                <span>📝 自动中文字幕</span>
+                                <input type="checkbox" class="ns-toggle-auto-sub">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle">
+                                <span>🏷️ 隐藏付费推广</span>
+                                <input type="checkbox" class="ns-toggle-hide-promo">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle">
+                                <span>🔗 新标签页打开</span>
+                                <input type="checkbox" class="ns-toggle-new-tab">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle ns-toggle-select">
+                                <span>🎨 界面主题</span>
+                                <select class="ns-theme-mode">
+                                    <option value="dark">深色</option>
+                                    <option value="light">浅色</option>
+                                    <option value="auto">跟随设备</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
                 </div>
-                <div class="ns-toggles">
-                    <label class="ns-toggle">
-                        <span>💬 气泡执行提示</span>
-                        <input type="checkbox" class="ns-toggle-bubble">
-                        <span class="ns-toggle-switch"></span>
-                    </label>
-                    <label class="ns-toggle">
-                        <span>🧪 打印调试日志</span>
-                        <input type="checkbox" class="ns-toggle-debug">
-                        <span class="ns-toggle-switch"></span>
-                    </label>
+                <div class="ns-group" data-group="数据与显示">
+                    <div class="ns-group-head"><span>📊 数据与显示（7）</span><span class="ns-group-arrow"><svg viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg></span></div>
+                    <div class="ns-group-body">
+                        <div class="ns-toggles">
+                            <label class="ns-toggle">
+                                <span>🌐 统计信息汉化</span>
+                                <input type="checkbox" class="ns-toggle-stats-i18n">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle">
+                                <span>📊 网速单位转换</span>
+                                <input type="checkbox" class="ns-toggle-speed-conv">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle">
+                                <span>👎 预测倒赞数据</span>
+                                <input type="checkbox" class="ns-toggle-dislike">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle">
+                                <span>📊 显示倒赞比例</span>
+                                <input type="checkbox" class="ns-toggle-ratebar">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle ns-toggle-select">
+                                <span>🎬 自动切换画质</span>
+                                <select class="ns-quality-mode">
+                                    <option value="best">最高</option>
+                                    <option value="1080p">1080p</option>
+                                    <option value="off">关闭</option>
+                                </select>
+                            </label>
+                            <label class="ns-toggle">
+                                <span>💬 气泡执行提示</span>
+                                <input type="checkbox" class="ns-toggle-bubble">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                            <label class="ns-toggle">
+                                <span>🧪 打印调试日志</span>
+                                <input type="checkbox" class="ns-toggle-debug">
+                                <span class="ns-toggle-switch"></span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
                 <div class="ns-actions">
-                    <button class="ns-reset">重置统计</button>
+                    <button class="ns-reset">重置</button>
+                    <button class="ns-export">导出</button>
+                    <button class="ns-import">导入</button>
                     <button class="ns-min">最小化</button>
                 </div>
             </div>
@@ -821,6 +1019,8 @@
         面板节点.querySelector('.ns-reset').addEventListener('click', (e) => {
             e.stopPropagation();
             策略键表.forEach(k => { 统计[k] = 0; });
+            统计.今日计数 = 0;
+            统计.今日日期 = 今日日期字符串();
             保存统计();
             刷新面板();
             logInfo('统计已重置');
@@ -831,6 +1031,29 @@
             面板节点.classList.remove('ns-expanded');
             面板节点.classList.add('ns-dots');
         });
+        // 导出 / 导入设置（选项 + 统计 + 面板位置，一键迁移）
+        面板节点.querySelector('.ns-export').addEventListener('click', (e) => {
+            e.stopPropagation();
+            导出设置();
+        });
+        面板节点.querySelector('.ns-import').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const 输入 = document.createElement('input');
+            输入.type = 'file';
+            输入.accept = 'application/json,.json';
+            输入.addEventListener('change', () => {
+                if (输入.files && 输入.files[0]) 导入设置(输入.files[0]);
+            });
+            输入.click();
+        });
+        // 版本行：显示当前版本；发现新版本时点击打开安装页
+        const 版本节点 = 面板节点.querySelector('.ns-version');
+        if (版本节点) {
+            版本节点.textContent = 脚本版本号;
+            版本节点.addEventListener('click', () => {
+                window.open('https://cdn.jsdelivr.net/gh/wlisboy/wlisboy@main/YouTube_Master.js', '_blank');
+            });
+        }
         // 最小化状态下点击小圆点恢复
         面板节点.addEventListener('click', () => {
             if (面板节点.dataset.拖动已移动) { delete 面板节点.dataset.拖动已移动; return; } // 刚拖动完，不触发恢复
@@ -848,10 +1071,11 @@
             const 状态节点 = 面板节点.querySelector('.ns-ad-count');
             if (!状态节点) return;
             const 广告开关键表 = [
-                '强显跳过按钮',
+                '强显跳过按钮', '秒跳广告',
                 '广告时段静音',
-                '广告横幅移除',
-                '年龄限制绕过', '自动恢复播放'
+                '广告横幅移除', '检测弹窗处理',
+                '年龄限制绕过', '自动恢复播放',
+                '跳过赞助片段'
             ];
             const 已开启数 = 广告开关键表.reduce((n, k) => n + (选项[k] ? 1 : 0), 0);
             if (已开启数 === 0) {
@@ -865,10 +1089,13 @@
         // 每个 class → 对应 选项 key 的映射表；切换时写选项、落盘、同步根类名、刷新状态、打日志。
         const 广告开关映射表 = [
             { cls: '.ns-toggle-ad-force-skip', key: '强显跳过按钮' },
+            { cls: '.ns-toggle-ad-instant-skip', key: '秒跳广告' },
             { cls: '.ns-toggle-ad-mute', key: '广告时段静音' },
             { cls: '.ns-toggle-ad-banner', key: '广告横幅移除' },
+            { cls: '.ns-toggle-ad-detect-dialog', key: '检测弹窗处理' },
             { cls: '.ns-toggle-ad-age', key: '年龄限制绕过' },
-            { cls: '.ns-toggle-ad-resume', key: '自动恢复播放' }
+            { cls: '.ns-toggle-ad-resume', key: '自动恢复播放' },
+            { cls: '.ns-toggle-ad-sponsor', key: '跳过赞助片段' }
         ];
         广告开关映射表.forEach(({ cls, key }) => {
             const 复选框 = 面板节点.querySelector(cls);
@@ -942,6 +1169,63 @@
             if (!选项.倒赞比例条) 移除倒赞比例条();
             else if (选项.预测倒赞数据) 处理预测倒赞();
         });
+        // 功能开关：防自动配音（原始语言音轨）
+        const 音轨复选框 = 面板节点.querySelector('.ns-toggle-original-audio');
+        音轨复选框.checked = 选项.防自动配音;
+        音轨复选框.addEventListener('change', () => {
+            选项.防自动配音 = 音轨复选框.checked;
+            保存选项();
+            已配音通知视频ID = null;
+            logInfo('防自动配音开关 →', 选项.防自动配音 ? '开' : '关');
+        });
+        // 功能开关：暂停确认消除
+        const 暂停确认复选框 = 面板节点.querySelector('.ns-toggle-autopause');
+        暂停确认复选框.checked = 选项.暂停确认消除;
+        暂停确认复选框.addEventListener('change', () => {
+            选项.暂停确认消除 = 暂停确认复选框.checked;
+            保存选项();
+            logInfo('暂停确认消除开关 →', 选项.暂停确认消除 ? '开' : '关');
+        });
+        // 功能开关：长按倍速 / 自动中文字幕 / 隐藏付费推广 / 新标签页打开
+        const 倍速复选框 = 面板节点.querySelector('.ns-toggle-hold-speed');
+        倍速复选框.checked = 选项.长按倍速;
+        倍速复选框.addEventListener('change', () => {
+            选项.长按倍速 = 倍速复选框.checked;
+            保存选项();
+            logInfo('长按倍速开关 →', 选项.长按倍速 ? '开' : '关');
+        });
+        const 中字幕复选框 = 面板节点.querySelector('.ns-toggle-auto-sub');
+        中字幕复选框.checked = 选项.自动中文字幕;
+        中字幕复选框.addEventListener('change', () => {
+            选项.自动中文字幕 = 中字幕复选框.checked;
+            保存选项();
+            中字幕处理视频ID = null; // 允许重新处理当前视频
+            logInfo('自动中文字幕开关 →', 选项.自动中文字幕 ? '开' : '关');
+        });
+        const 付费推广复选框 = 面板节点.querySelector('.ns-toggle-hide-promo');
+        付费推广复选框.checked = 选项.隐藏付费推广;
+        付费推广复选框.addEventListener('change', () => {
+            选项.隐藏付费推广 = 付费推广复选框.checked;
+            保存选项();
+            应用付费推广设置();
+            logInfo('隐藏付费推广开关 →', 选项.隐藏付费推广 ? '开' : '关');
+        });
+        const 新标签页复选框 = 面板节点.querySelector('.ns-toggle-new-tab');
+        新标签页复选框.checked = 选项.新标签页打开;
+        新标签页复选框.addEventListener('change', () => {
+            选项.新标签页打开 = 新标签页复选框.checked;
+            保存选项();
+            logInfo('新标签页打开开关 →', 选项.新标签页打开 ? '开' : '关');
+        });
+        // 功能开关：界面主题
+        const 主题选择框 = 面板节点.querySelector('.ns-theme-mode');
+        主题选择框.value = 选项.界面主题;
+        主题选择框.addEventListener('change', () => {
+            选项.界面主题 = 主题选择框.value;
+            保存选项();
+            应用界面主题();
+            logInfo('界面主题 →', 选项.界面主题);
+        });
         // 功能开关：调试模式
         const 调试复选框 = 面板节点.querySelector('.ns-toggle-debug');
         调试复选框.checked = 选项.调试模式;
@@ -961,7 +1245,23 @@
 
         刷新广告策略状态();
 
+        // 分组折叠：点击组标题展开/收起，状态持久化（默认全部收起，面板保持紧凑）
+        const 组状态键 = 'nextshield_adb_groups_v1';
+        let 组状态 = {};
+        try { 组状态 = JSON.parse(localStorage.getItem(组状态键) || '{}') || {}; } catch (e) { }
+        const 应用组状态 = (组) => 组.classList.toggle('ns-open', !!组状态[组.dataset.group]);
+        面板节点.querySelectorAll('.ns-group').forEach(组 => {
+            应用组状态(组);
+            组.querySelector('.ns-group-head').addEventListener('click', (e) => {
+                e.stopPropagation();
+                组状态[组.dataset.group] = !组.classList.contains('ns-open');
+                try { localStorage.setItem(组状态键, JSON.stringify(组状态)); } catch (err) { }
+                应用组状态(组);
+            });
+        });
+
         刷新面板();
+        应用界面主题(); // 按当前主题设置给新建面板换肤
         requestAnimationFrame(() => 面板节点.classList.add('ns-ready')); // 入场动画
         logOk('✅ 统计面板已创建并挂到 body');
         return true;
@@ -972,6 +1272,8 @@
         if (!面板节点) return;
         const 总数节点 = 面板节点.querySelector('.ns-total');
         if (总数节点) 总数节点.textContent = 统计总数();
+        const 今日节点 = 面板节点.querySelector('.ns-today-count');
+        if (今日节点) 今日节点.textContent = 统计.今日计数 || 0;
         策略键表.forEach(key => {
             const 计数节点 = 面板节点.querySelector(`[data-count="${key}"]`);
             if (!计数节点) return;
@@ -987,6 +1289,10 @@
     function 记录拦截(策略key, 数量 = 1) {
         if (统计[策略key] === undefined) return; // 未知策略，忽略
         统计[策略key] += 数量;
+        // 今日拦截计数（跨天自动归零）
+        const 今天 = 今日日期字符串();
+        if (统计.今日日期 !== 今天) { 统计.今日日期 = 今天; 统计.今日计数 = 0; }
+        统计.今日计数 = (统计.今日计数 || 0) + 数量;
         保存统计();
         刷新面板();
         logOk(`🎯 拦截 +${数量}（${策略key}）→ 累计 ${统计总数()}`);
@@ -1013,6 +1319,7 @@
         if (!通知堆栈) {
             通知堆栈 = document.createElement('div');
             通知堆栈.className = 'nextshield-notification-stack';
+            通知堆栈.dataset.nsTheme = 取生效主题();
             容器挂载点.appendChild(通知堆栈);
         }
 
@@ -1101,12 +1408,29 @@
     }
 
     // 视频广告处理统一入口
-    //   优先使用 YouTube 原生播放器 API（seekTo）跳过，避免直接操作 HTMLVideoElement 触发属性变更监控。
+    //   优先使用 YouTube 原生播放器 API（seekTo / loadVideoByPlayerVars）跳过，
+    //   避免直接操作 HTMLVideoElement 触发属性变更监控。
     function 处理视频广告() {
         const 播放器 = 已绑定播放器 || document.querySelector('#movie_player') || document.querySelector('.html5-video-player');
         if (播放器) 绑定播放器广告观察器();
 
         const 在广告中 = 播放器处于广告状态(播放器);
+
+        if (!在广告中) {
+            // 非广告期间：记录正片进度快照（供秒跳「重载正片」恢复进度），广告结束则复位会话标记
+            if (秒跳已处理) { 秒跳已处理 = false; 秒跳点击次数 = 0; }
+            const 播放器API = 获取播放器API(播放器);
+            const 页面视频ID = 提取视频ID();
+            if (播放器API && typeof 播放器API.getCurrentTime === 'function'
+                && typeof 播放器API.getVideoData === 'function' && 页面视频ID) {
+                try {
+                    const 数据 = 播放器API.getVideoData();
+                    if (数据 && 数据.video_id === 页面视频ID) {
+                        正片进度快照 = 播放器API.getCurrentTime() || 0;
+                    }
+                } catch (e) { }
+            }
+        }
 
         // 广告时段静音处理
         处理广告静音(播放器, 在广告中);
@@ -1115,6 +1439,11 @@
 
         // [调试] 记录广告检测
         logInfo('[处理视频广告] 检测到广告状态 | classList=' + (播放器 ? Array.from(播放器.classList).filter(function(c){return c.includes('ad')}).join(',') : '?') + ' | 强显跳过=' + 选项.强显跳过按钮);
+
+        // ===== 秒跳广告 — 点击跳过按钮 / seek 广告结尾 / 重载正片，三段式 =====
+        if (选项.秒跳广告) {
+            秒跳广告(播放器);
+        }
 
         // ===== 强显跳过按钮 — 让隐藏的跳过按钮可见 =====
         if (选项.强显跳过按钮) {
@@ -1139,6 +1468,72 @@
             显示通知('已显示广告跳过按钮 🖱️', 'ad-blocked');
             记录拦截('强显跳过按钮', 已显示);
         }
+    }
+
+    // ===== 秒跳广告（三段式，借鉴 DarkShadow44「Youtube Ads BYPASSER」的实现思路） =====
+    // ① 点击可见的「跳过」按钮（模拟真人，最不易触发检测）
+    // ② 把广告流直接 seek 到结尾（让广告「自然播完」，正片立即接上）
+    // ③ 用 loadVideoByPlayerVars 重载正片流，把广告整体顶掉（DarkShadow44 的核心手段）
+    // 每次广告「显示会话」只处理一次 + 冷却，防止重复计数与重载循环。
+    // 与原版的两点差异：
+    //   - 重载时的恢复进度不再取广告里的 getCurrentTime（那是广告的时间轴），
+    //     而是平时记录的「正片进度快照」，从正片实际播放位置继续；
+    //   - 重载前校验 getVideoData().video_id 与页面视频 ID 一致，防止误把广告流当正片重载。
+    const 秒跳按钮选择器 = '.ytp-ad-skip-button-modern, .ytp-ad-skip-button, .ytp-skip-ad-button';
+
+    function 秒跳成功(消息) {
+        秒跳已处理 = true;
+        秒跳冷却至 = Date.now() + 3000; // 短冷却：跨过广告→正片的 class 过渡期
+        记录拦截('秒跳广告');
+        显示通知(消息, 'ad-blocked', 2000);
+    }
+
+    function 秒跳广告(播放器) {
+        if (Date.now() < 秒跳冷却至) return;
+
+        // ① 优先点击可见的「跳过」按钮；连续 2 次无效（按钮可能是被强显出来的未启用态）就不再点
+        const 跳过按钮 = document.querySelector(秒跳按钮选择器);
+        if (跳过按钮 && 跳过按钮.offsetParent !== null && 秒跳点击次数 < 2) {
+            跳过按钮.click();
+            秒跳点击次数++;
+            秒跳冷却至 = Date.now() + 2000;
+            记录拦截('秒跳广告');
+            显示通知('已自动跳过广告 ⏭️', 'ad-blocked', 2000);
+            logInfo('秒跳广告：已点击跳过按钮（第 ' + 秒跳点击次数 + ' 次）');
+            return;
+        }
+
+        const 播放器API = 获取播放器API(播放器);
+        if (!播放器API) return;
+
+        // ② 广告流 seek 到结尾
+        const 广告视频 = 播放器.querySelector('video.html5-main-video') || 播放器.querySelector('video');
+        if (广告视频 && 广告视频.src && !广告视频.paused
+            && Number.isFinite(广告视频.duration) && 广告视频.duration > 0 && 广告视频.duration < 600
+            && 广告视频.currentTime < 广告视频.duration - 0.5) {
+            try { 播放器API.seekTo(广告视频.duration, true); } catch (e) { }
+            秒跳成功('已自动跳过广告 ⏭️');
+            return;
+        }
+
+        // ③ 重载正片流
+        const 视频数据 = (typeof 播放器API.getVideoData === 'function') ? 播放器API.getVideoData() : null;
+        if (!视频数据 || !视频数据.video_id) return;
+        if (视频数据.video_id !== 提取视频ID()) return; // getVideoData 返回的不是正片 ID，放弃重载
+        if (typeof 播放器API.loadVideoWithPlayerVars !== 'function'
+            && typeof 播放器API.loadVideoByPlayerVars !== 'function') return;
+        const 重载参数 = { videoId: 视频数据.video_id, start: Math.max(0, Math.floor(正片进度快照)) };
+        try {
+            if (typeof 播放器API.loadVideoWithPlayerVars === 'function') {
+                播放器API.loadVideoWithPlayerVars(重载参数);
+            } else {
+                播放器API.loadVideoByPlayerVars(重载参数);
+            }
+        } catch (e) {
+            logWarn('秒跳广告：重载正片失败:', e);
+            return;
+        }
+        秒跳成功('已重载正片跳过广告 🛡️');
     }
 
     // ===== 广告时段静音（被动特性，由「广告时段静音」开关控制） =====
@@ -1573,11 +1968,13 @@
     async function 拉取倒赞数据(视频ID) {
         if (!视频ID) return null;
         const 缓存 = 倒赞缓存.get(视频ID);
-        // 10 分钟内复用缓存，减少对 RYD 服务器的请求压力
-        if (缓存 && Date.now() - 缓存.fetchedAt < 10 * 60 * 1000) {
+        // 成功结果 10 分钟内复用缓存，减少对 RYD 服务器的请求压力
+        if (缓存 && !缓存.失败 && Date.now() - 缓存.fetchedAt < 10 * 60 * 1000) {
             logInfo('命中倒赞缓存:', 视频ID, 缓存);
             return 缓存;
         }
+        // 失败标记只保留 60 秒：避免高频重试的同时，不让一次限流把倒赞封死 10 分钟
+        if (缓存 && 缓存.失败 && Date.now() - 缓存.fetchedAt < 60 * 1000) return null;
         try {
             const 点赞数 = 读取点赞数() || 0;
             const 请求地址 = `${RYD_API基础}/votes?videoId=${encodeURIComponent(视频ID)}&likeCount=${点赞数}`;
@@ -1806,12 +2203,15 @@
         const 数据 = await 拉取倒赞数据(视频ID);
         倒赞拉取中ID = null;
         if (!数据 || 数据.失败) return;
+        // 导航竞态防护：等待期间用户已切走 → 丢弃数据，防止把 A 视频的倒赞注入到 B 视频
+        if (倒赞当前视频ID !== 视频ID || 提取视频ID() !== 视频ID) return;
 
         // 等倒赞按钮容器就绪（点赞按钮用于克隆文字模板，倒赞按钮用于挂文本）
         // 这里只等「容器渲染出来」这一刻，之后改写都由周期/观察器兜底，
         // 不再把按钮引用长期缓存进闭包（避免节点被替换后引用失效）。
         const 倒赞按钮 = await 等待多选(倒赞选择器表.倒赞按钮, 4000);
         if (!倒赞按钮) { logInfo('未找到倒赞按钮，跳过注入（等待周期定时器重试）'); return; }
+        if (倒赞当前视频ID !== 视频ID || 提取视频ID() !== 视频ID) return; // 等待了最多 4 秒，再次校验
 
         注入倒赞(数据);
     }
@@ -1925,9 +2325,12 @@
         const 数据 = await 拉取倒赞数据(视频ID);
         倒赞拉取中ID = null;
         if (!数据 || 数据.失败) return;
+        // 导航竞态防护：等待期间已切走（或不再是 Shorts 页）→ 丢弃数据
+        if (!是否Shorts() || 提取视频ID() !== 视频ID) return;
 
         const 倒赞按钮 = await 等待多选(倒赞选择器表.倒赞按钮, 4000);
         if (!倒赞按钮) return;
+        if (!是否Shorts() || 提取视频ID() !== 视频ID) return; // 等待了最多 4 秒，再次校验
 
         // 在按钮容器下挂一个文字节点显示倒赞数
         let 文本 = 倒赞按钮.querySelector('.shorts-dislike-count');
@@ -1953,32 +2356,356 @@
         }
     }
 
+    // ===== 跳过赞助片段（SponsorBlock 社区数据，借鉴 SponsorBlock Lite 思路） =====
+    // API: GET https://sponsor.ajay.app/api/skipSegments?videoID=<ID>&categories=["sponsor","selfpromo"]
+    // 返回: [{ segment: [起点, 终点], category, actionType, UUID, ... }]；404 表示该视频无片段（官方约定）。
+    const 赞助API基础 = 'https://sponsor.ajay.app';
+    const 赞助分类参数 = encodeURIComponent(JSON.stringify(['sponsor', 'selfpromo']));
+    const 赞助分类名 = { sponsor: '赞助', selfpromo: '自主推广', interaction: '互动力求', intro: '开场', outro: '尾声', preview: '回顾/预览', music_offtopic: '非音乐部分' };
+    const 赞助段缓存 = new Map(); // 视频ID → { 段列表, fetchedAt }
+    let 赞助当前视频ID = null;
+    let 赞助拉取中ID = null;
+
+    function 重置赞助状态() {
+        赞助当前视频ID = null;
+        赞助拉取中ID = null;
+        // 缓存超出 30 个视频后清掉最早的，避免常驻内存无限增长
+        if (赞助段缓存.size > 30) 赞助段缓存.delete(赞助段缓存.keys().next().value);
+    }
+
+    async function 拉取赞助段(视频ID) {
+        if (赞助拉取中ID === 视频ID) return;
+        赞助拉取中ID = 视频ID;
+        try {
+            const 请求地址 = `${赞助API基础}/api/skipSegments?videoID=${encodeURIComponent(视频ID)}&categories=${赞助分类参数}`;
+            const 响应 = await fetch(请求地址, { method: 'GET' });
+            // 404 = 该视频没有社区提交的片段，按空数据处理
+            const 段列表 = (响应.status === 404) ? [] : await 响应.json();
+            if (!Array.isArray(段列表)) throw new Error('返回格式异常');
+            // 只保留可跳过的整段片段（排除 poi 单点提示等其它动作类型）
+            const 已过滤 = 段列表.filter(段 => 段 && 段.actionType === 'skip' && Array.isArray(段.segment) && 段.segment.length === 2);
+            赞助段缓存.set(视频ID, { 段列表: 已过滤, fetchedAt: Date.now() });
+            logInfo('SponsorBlock 拉取完成:', 视频ID, '可跳片段', 已过滤.length, '个');
+        } catch (错误) {
+            logWarn('SponsorBlock 拉取失败:', 视频ID, 错误.message);
+            赞助段缓存.set(视频ID, { 段列表: [], fetchedAt: Date.now() });
+        } finally {
+            赞助拉取中ID = null;
+        }
+    }
+
+    function 处理赞助片段() {
+        if (!选项.跳过赞助片段) return;
+        if (是否Shorts()) return;
+        const 视频ID = 提取视频ID();
+        if (!视频ID) return;
+
+        // 换了视频就拉取一次社区片段数据（带缓存，失败不重试风暴）
+        if (赞助当前视频ID !== 视频ID) {
+            赞助当前视频ID = 视频ID;
+            拉取赞助段(视频ID);
+        }
+
+        const 缓存 = 赞助段缓存.get(视频ID);
+        if (!缓存 || !缓存.段列表 || 缓存.段列表.length === 0) return;
+        const 播放器 = document.querySelector('#movie_player') || document.querySelector('.html5-video-player');
+        if (播放器处于广告状态(播放器)) return; // 广告期间不校验（currentTime 是广告时间轴）
+        const 播放器API = 获取播放器API(播放器);
+        if (!播放器API || typeof 播放器API.getCurrentTime !== 'function' || typeof 播放器API.seekTo !== 'function') return;
+        let 当前时间 = NaN;
+        try { 当前时间 = 播放器API.getCurrentTime(); } catch (e) { return; }
+        if (!Number.isFinite(当前时间)) return;
+        for (const 段 of 缓存.段列表) {
+            if (当前时间 >= 段.segment[0] && 当前时间 < 段.segment[1] - 0.3) {
+                try { 播放器API.seekTo(段.segment[1], true); } catch (e) { break; }
+                记录拦截('跳过赞助片段');
+                显示通知(`已跳过${赞助分类名[段.category] || '赞助'}片段 ⏭️`, 'success', 2000);
+                logOk('赞助片段已跳过:', 段.category, 段.segment);
+                break;
+            }
+        }
+    }
+
     // ===== 绕过年龄限制 =====
     function 绕过年龄限制() {
         if (!选项.年龄限制绕过) return;
         const 年龄关键词 = /年龄|年龄限制|年龄验证|age\s*restriction|age-?restricted|confirm\s*your\s*age|verify\s*your\s*age|must be \d+|18\+|未满\s*18|成年/i;
         const 年龄弹窗 = Array.from(document.querySelectorAll('ytd-enforcement-message-view-model')).find(弹窗 => {
-            const 文本 = (弹窗.innerText || '').replace(/\s+/g, ' ').trim();
+            const 文本 = (弹窗.textContent || '').replace(/\s+/g, ' ').trim();
             const 是年龄提示 = 年龄关键词.test(文本);
             const 是广告拦截提示 = /adblock|allow\s*ads|blocker|ads\s*violate|使用广告拦截器|广告拦截器|允许展示 YouTube 广告|试用 YouTube Premium|将无法播放视频|报告问题/i.test(文本);
             return 是年龄提示 && !是广告拦截提示;
         });
-        const 视频 = document.querySelector('video');
 
         if (年龄弹窗) {
             年龄弹窗.remove();
+            年龄弹窗最近出现 = Date.now();
             记录拦截('年龄限制绕过');
             显示通知('已绕过年龄限制', 'success');
         }
 
-        // 若视频被年龄限制卡住无法播放，则跳转到无 Cookie 嵌入页播放
-        if (视频 && 视频.paused && 视频.readyState === 0) {
-            const 被年龄拦截 = !!document.querySelector('ytd-player .ytd-watch-flexy[ad-blocked]');
-            const 视频ID = new URLSearchParams(window.location.search).get('v');
-            if (被年龄拦截 && 视频ID) {
-                window.location.href = `https://www.youtube-nocookie.com/embed/${视频ID}?autoplay=1`;
+        // 兜底：年龄弹窗出现过且视频仍卡在 0:00 无法起播 → 跳转无 Cookie 嵌入页播放。
+        // 连续观察多次仍卡住才触发，避免把「尚未起播的正常视频」误判为被拦截。
+        // （旧实现用的选择器 'ytd-player .ytd-watch-flexy[ad-blocked]' 层级写反、永不命中，
+        //   导致该兜底从未生效，已废弃。）
+        const 视频 = document.querySelector('video');
+        if (视频 && 视频.paused && 视频.readyState === 0 && Date.now() - 年龄弹窗最近出现 < 20000) {
+            年龄卡住计数++;
+            if (年龄卡住计数 >= 4) {
+                年龄卡住计数 = 0;
+                年龄弹窗最近出现 = 0;
+                const 视频ID = new URLSearchParams(window.location.search).get('v');
+                if (视频ID) {
+                    logOk('年龄限制视频仍无法播放，跳转无 Cookie 嵌入页');
+                    window.location.href = `https://www.youtube-nocookie.com/embed/${视频ID}?autoplay=1`;
+                }
             }
+        } else {
+            年龄卡住计数 = 0;
         }
+    }
+
+    // ===== 广告拦截检测弹窗处理 =====
+    // YouTube 检测到广告拦截工具时会弹「广告拦截器违反服务条款」弹窗并锁住播放。
+    // 该弹窗与年龄验证共用 ytd-enforcement-message-view-model，靠文案区分：
+    // 年龄模块已排除广告拦截文案，这里只处理广告拦截类弹窗。移除弹窗后恢复播放。
+    function 处理检测弹窗() {
+        if (!选项.检测弹窗处理) return;
+        if (Date.now() < 检测弹窗冷却至) return;
+        const 弹窗列表 = document.querySelectorAll('ytd-enforcement-message-view-model');
+        if (弹窗列表.length === 0) return;
+        let 已处理 = false;
+        弹窗列表.forEach(弹窗 => {
+            const 文本 = (弹窗.textContent || '').replace(/\s+/g, ' ').trim();
+            if (!/adblock|ad\s*blocker|blocker|ads?\s*violate|广告拦截|不允许.*广告|允许展示.*广告|将无法播放|terms of service/i.test(文本)) return;
+            // 从弹窗往上找承载它的 paper-dialog 整体移除（不能删 ytd-popup-container，会殃及其它弹窗）
+            const 对话框 = 弹窗.closest('tp-yt-paper-dialog') || 弹窗;
+            对话框.remove();
+            已处理 = true;
+        });
+        if (!已处理) return;
+        // 弹窗后面的黑色遮罩一并清掉（该元素只是纯遮罩，无交互内容）
+        document.querySelectorAll('tp-yt-iron-overlay-backdrop').forEach(遮罩 => 遮罩.remove());
+        检测弹窗冷却至 = Date.now() + 3000;
+        记录拦截('检测弹窗处理');
+        显示通知('已关闭广告拦截检测弹窗 🛡️', 'success');
+        // 弹窗通常会暂停播放，恢复之
+        const 播放器API = 获取播放器API();
+        if (播放器API && typeof 播放器API.playVideo === 'function') {
+            try { 播放器API.playVideo(); } catch (e) { }
+        } else {
+            const 视频 = document.querySelector('video');
+            if (视频 && 视频.paused) 视频.play().catch(() => { });
+        }
+    }
+
+    // ===== 暂停确认弹窗自动消除 =====
+    // 「视频已暂停。是否继续观看？」/「仍在观看？视频即将暂停」确认框出现时自动点击「继续」。
+    // 采用纯 DOM 方案（CY Fung 的原版 hook 了 YouTube 内部 youThereData 属性，
+    // 与本脚本「零运行时函数钩子」的原则冲突，故仅借鉴其目标，实现换为对话框自动确认）。
+    function 处理暂停确认() {
+        if (!选项.暂停确认消除) return;
+        document.querySelectorAll('yt-confirm-dialog-renderer').forEach(对话框 => {
+            const 文本 = (对话框.textContent || '').slice(0, 300);
+            if (!/是否继续观看|仍在观看|继续观看|Continue watching|Still watching|Are you there/i.test(文本)) return;
+            const 确认按钮 = 对话框.querySelector('#confirm-button button') || 对话框.querySelector('#confirm-button');
+            if (确认按钮) {
+                确认按钮.click();
+                logOk('已自动确认「继续观看」弹窗');
+            }
+        });
+    }
+
+    // ===== 防止自动配音（借鉴 ElectroKnight22「YouTube Prevent Auto-Dub」实现） =====
+    // 原始语言音轨 ID 取自 playerResponse.captions.playerCaptionsTracklistRenderer 的默认音轨；
+    // 当前音轨与它不符（AI 配音生效中）就用播放器 API setAudioTrack 切回原始音轨。
+    function 取音轨ID(音轨) {
+        return (音轨 && 音轨.audioTrackId) || (音轨 && Object.values(音轨).find(p => p && p.id)?.id) || null;
+    }
+
+    function 防止自动配音() {
+        if (!选项.防自动配音) return;
+        const 播放器API = 获取播放器API();
+        if (!播放器API
+            || typeof 播放器API.getAvailableAudioTracks !== 'function'
+            || typeof 播放器API.setAudioTrack !== 'function'
+            || typeof 播放器API.getPlayerResponse !== 'function') return;
+        try {
+            const 渲染器 = 播放器API.getPlayerResponse()?.captions?.playerCaptionsTracklistRenderer;
+            const 原始音轨ID = 渲染器?.audioTracks?.[渲染器?.defaultAudioTrackIndex]?.audioTrackId;
+            if (!原始音轨ID) return; // 无音轨清单（多数非 AI 配音视频），跳过
+            const 当前音轨 = (typeof 播放器API.getAudioTrack === 'function') ? 播放器API.getAudioTrack() : null;
+            if (取音轨ID(当前音轨) === 原始音轨ID) return; // 已是原始音轨
+            const 原始音轨 = (播放器API.getAvailableAudioTracks() || []).find(音轨 => 取音轨ID(音轨) === 原始音轨ID);
+            if (!原始音轨) return;
+            播放器API.setAudioTrack(原始音轨);
+            logOk('防止自动配音：已切回原始语言音轨');
+            const 视频ID = 提取视频ID();
+            if (视频ID && 已配音通知视频ID !== 视频ID) {
+                已配音通知视频ID = 视频ID;
+                显示通知('已恢复原始语言音轨 🗣️', 'success', 2000);
+            }
+        } catch (e) {
+            logWarn('防止自动配音处理失败:', e);
+        }
+    }
+
+    // ===== 播放增强：长按倍速（B站同款交互） =====
+    // 按住 Z 键临时 2 倍速，松开恢复。选 Z 而不是空格：空格被 YouTube 用作播放/暂停，
+    // 劫持空格会影响正常操作；Z 键 YouTube 未绑定，无冲突。
+    function 安装长按倍速() {
+        if (长按倍速已安装) return;
+        长按倍速已安装 = true;
+        const 取主视频 = () => document.querySelector('#movie_player video') || document.querySelector('video');
+        window.addEventListener('keydown', (e) => {
+            if (!选项.长按倍速) return;
+            if (e.code !== 'KeyZ' || e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
+            const 目标 = e.target;
+            if (目标 && (目标.tagName === 'INPUT' || 目标.tagName === 'TEXTAREA' || 目标.isContentEditable)) return;
+            const 视频 = 取主视频();
+            if (!视频 || 视频.paused || 长按倍速原速 !== null) return;
+            长按倍速原速 = 视频.playbackRate || 1;
+            try { 视频.playbackRate = 2; } catch (err) { 长按倍速原速 = null; return; }
+            显示通知('已临时 2 倍速 ⏩（松开 Z 恢复）', 'info', 1200);
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.code !== 'KeyZ' || 长按倍速原速 === null) return;
+            const 视频 = 取主视频();
+            if (视频) { try { 视频.playbackRate = 长按倍速原速; } catch (err) { } }
+            长按倍速原速 = null;
+        });
+        // 失焦保护：切走窗口时倍速还挂着的话强制恢复，防止「回来发现视频一直在 2x」
+        window.addEventListener('blur', () => {
+            if (长按倍速原速 === null) return;
+            const 视频 = 取主视频();
+            if (视频) { try { 视频.playbackRate = 长按倍速原速; } catch (err) { } }
+            长按倍速原速 = null;
+        });
+    }
+
+    // ===== 播放增强：点击视频链接强制新标签页打开 =====
+    // 仅拦截首页/搜索/频道页里的 /watch、/shorts、/live 链接，Ctrl/Shift/中键等系统行为不干预
+    function 安装新标签页打开() {
+        if (新标签页已安装) return;
+        新标签页已安装 = true;
+        document.addEventListener('click', (e) => {
+            if (!选项.新标签页打开) return;
+            if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+            const 链接 = e.target.closest && e.target.closest('a[href]');
+            if (!链接) return;
+            const 路径 = 链接.getAttribute('href') || '';
+            if (!/^\/(watch\?|shorts\/|live\/)/.test(路径)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            window.open(location.origin + 路径, '_blank');
+        }, true);
+    }
+
+    // ===== 播放增强：隐藏「含付费推广」角标 =====
+    // 用 CSS 隐藏而不是删 DOM：不动播放器内部元素，遵守脚本「不拆播放器」的反检测原则
+    function 应用付费推广设置() {
+        const 根节点 = document.documentElement;
+        if (选项.隐藏付费推广) 根节点.setAttribute('data-ns-hide-promo', '');
+        else 根节点.removeAttribute('data-ns-hide-promo');
+    }
+
+    // ===== 播放增强：自动中文字幕 =====
+    // 有字幕的视频自动开启 CC；若非原生中文轨道，则挂上「自动翻译 → 中文」。
+    // 通过播放器 captions 选项实现（getOption/setOption），每个视频只处理一次。
+    function 处理中文字幕() {
+        if (!选项.自动中文字幕) return;
+        const 视频ID = 提取视频ID();
+        if (!视频ID || 中字幕处理视频ID === 视频ID) return;
+        const 播放器API = 获取播放器API();
+        if (!播放器API || typeof 播放器API.getOption !== 'function' || typeof 播放器API.setOption !== 'function') return;
+        try {
+            const 轨道列表 = 播放器API.getOption('captions', 'tracklist') || [];
+            if (!轨道列表.length) return; // 没有字幕轨的视频不处理
+            const 当前轨 = 播放器API.getOption('captions', 'track');
+            if (当前轨 && ((当前轨.languageCode && /^zh/i.test(当前轨.languageCode))
+                || (当前轨.translationLanguage && /^zh/i.test(当前轨.translationLanguage.languageCode || '')))) {
+                中字幕处理视频ID = 视频ID; // 已经是中文（原生或已翻译），不动
+                return;
+            }
+            const 翻译语言 = 播放器API.getOption('captions', 'translationLanguages') || [];
+            const 中文语言 = 翻译语言.find(l => l && (l.languageCode === 'zh-CN' || l.languageCode === 'zh-Hans'))
+                || 翻译语言.find(l => l && l.languageName && JSON.stringify(l.languageName).includes('中文'));
+            if (中文语言) {
+                播放器API.setOption('captions', 'track', { ...轨道列表[0], translationLanguage: 中文语言 });
+            } else {
+                播放器API.setOption('captions', 'track', 轨道列表[0]); // 没有翻译源就只开原字幕
+            }
+            中字幕处理视频ID = 视频ID;
+            显示通知('已开启中文字幕 🈶', 'success', 2000);
+            logOk('自动中文字幕：已启用');
+        } catch (e) {
+            logWarn('自动中文字幕处理失败:', e);
+            中字幕处理视频ID = 视频ID;
+        }
+    }
+
+    // ===== 设置导入导出（换浏览器/重装一键迁移） =====
+    function 导出设置() {
+        try {
+            const 数据 = JSON.stringify({ 版本: 脚本版本号, 导出时间: new Date().toISOString(), 选项, 统计, 面板位置: 加载面板位置() }, null, 2);
+            const 下载链接 = document.createElement('a');
+            下载链接.href = URL.createObjectURL(new Blob([数据], { type: 'application/json' }));
+            下载链接.download = 'YouTube优化大师-设置-' + 今日日期字符串() + '.json';
+            下载链接.click();
+            setTimeout(() => URL.revokeObjectURL(下载链接.href), 1000);
+            显示通知('设置已导出 💾', 'success');
+        } catch (e) {
+            logError('导出设置失败:', e);
+            显示通知('导出失败，详见控制台 ⚠️', 'warning');
+        }
+    }
+
+    function 导入设置(文件) {
+        const 读取器 = new FileReader();
+        读取器.onload = () => {
+            try {
+                const 存档 = JSON.parse(读取器.result);
+                if (!存档 || typeof 存档 !== 'object' || !存档.选项) throw new Error('文件格式不正确');
+                localStorage.setItem(设置键, JSON.stringify(存档.选项));
+                if (存档.统计 && typeof 存档.统计 === 'object') localStorage.setItem(存档键, JSON.stringify(存档.统计));
+                if (存档.面板位置 && Number.isFinite(存档.面板位置.left)) 保存面板位置(存档.面板位置.left, 存档.面板位置.top);
+                显示通知('设置已导入，即将刷新页面 🔄', 'success', 1800);
+                setTimeout(() => location.reload(), 1200);
+            } catch (e) {
+                显示通知('导入失败：' + e.message, 'warning');
+                logWarn('导入设置失败:', e);
+            }
+        };
+        读取器.readAsText(文件);
+    }
+
+    // ===== 更新检查（对比 jsDelivr 上的最新版本号） =====
+    function 比较版本号(a, b) {
+        const 甲 = String(a).split('.').map(n => parseInt(n, 10) || 0);
+        const 乙 = String(b).split('.').map(n => parseInt(n, 10) || 0);
+        for (let i = 0; i < Math.max(甲.length, 乙.length); i++) {
+            const 差 = (甲[i] || 0) - (乙[i] || 0);
+            if (差 !== 0) return 差;
+        }
+        return 0;
+    }
+
+    function 检查更新() {
+        fetch('https://cdn.jsdelivr.net/gh/wlisboy/wlisboy@main/YouTube_Master.js', { method: 'GET' })
+            .then(响应 => 响应.ok ? 响应.text() : Promise.reject(new Error('HTTP ' + 响应.status)))
+            .then(文本 => {
+                const 匹配 = 文本.match(/@version\s+([\d.]+)/);
+                if (!匹配) return;
+                if (比较版本号(匹配[1], 脚本版本号) > 0) {
+                    显示通知(`发现新版本 v${匹配[1]}，展开面板点击「版本」可更新 🔄`, 'info', 5000);
+                    const 版本节点 = document.querySelector('.ns-version');
+                    if (版本节点) {
+                        版本节点.textContent = '可更新 ' + 匹配[1];
+                        版本节点.dataset.update = '1';
+                    }
+                }
+            })
+            .catch(e => logInfo('更新检查失败（不影响使用）:', e.message));
     }
 
     // ===== 移除页面上的广告横幅 / 商品推荐 / 信息流广告等 =====
@@ -2003,8 +2730,20 @@
             });
         });
 
-        // 单独处理 engagement 面板：评论区一律保留，其余仅当确含广告/赞助内容才删。
+        if (移除数量 > 0) {
+            记录拦截('广告横幅移除', 移除数量);
+            显示通知(`已移除 ${移除数量} 个广告横幅`, 'ad-blocked');
+        }
+    }
+
+    // engagement 面板扫描（性能优化：textContent 全文扫描是重活，每个面板节点
+    // 只做一次并记在 dataset 上，主循环/低频循环反复调用也不再重复扫描）
+    function 扫描赞助面板() {
+        if (!选项.广告横幅移除) return;
+        let 移除数量 = 0;
         document.querySelectorAll('ytd-engagement-panel-section-list-renderer').forEach(面板 => {
+            if (面板.dataset.nsAdScanned === '1') return;
+            面板.dataset.nsAdScanned = '1';
             // ① 目标 ID 命中评论区 → 保留（Shorts 与普通视频的评论都依赖它）
             const 目标ID = 面板.getAttribute('target-id') || '';
             if (目标ID.includes('comment')) return;
@@ -2024,10 +2763,9 @@
                 移除数量++;
             }
         });
-
         if (移除数量 > 0) {
             记录拦截('广告横幅移除', 移除数量);
-            显示通知(`已移除 ${移除数量} 个广告横幅`, 'ad-blocked');
+            显示通知(`已移除 ${移除数量} 个广告面板`, 'ad-blocked');
         }
     }
 
@@ -2070,6 +2808,16 @@
         已绑定播放器 = null;
         恢复音量(); // 恢复音量状态（防止跨视频残留静音）
         同步广告过滤状态();
+        正片进度快照 = 0; // 新视频的进度快照作废
+        秒跳已处理 = false;
+        秒跳点击次数 = 0;
+        秒跳冷却至 = 0;
+        检测弹窗冷却至 = 0;
+        年龄弹窗最近出现 = 0;
+        年龄卡住计数 = 0;
+        已配音通知视频ID = null;
+        中字幕处理视频ID = null; // 新视频重新检查中文字幕
+        重置赞助状态(); // 新视频需重新拉取赞助片段
         倒赞导航重置(); // 新视频需重新预测倒赞
     }
 
@@ -2094,9 +2842,28 @@
             setTimeout(处理预测倒赞, 1200);
 
             // 监听 YouTube 单页应用（SPA）的页面切换
+            // 跟随设备模式下，系统深浅色切换时实时换肤
+            try {
+                if (浅色媒体查询) {
+                    if (typeof 浅色媒体查询.addEventListener === 'function') 浅色媒体查询.addEventListener('change', 应用界面主题);
+                    else if (typeof 浅色媒体查询.addListener === 'function') 浅色媒体查询.addListener(应用界面主题);
+                }
+            } catch (e) { }
+
+            // 安装一次性增强：长按倍速 / 新标签页打开 / 付费推广角标隐藏
+            安装长按倍速();
+            安装新标签页打开();
+            应用付费推广设置();
+
+            // 更新检查：8 秒后首查，之后每 30 分钟一次
+            setTimeout(检查更新, 8000);
+            setInterval(检查更新, 30 * 60 * 1000);
+
             window.addEventListener('yt-navigate-finish', 页面导航重置);
             window.addEventListener('yt-navigate-finish', 绑定播放器广告观察器);
             window.addEventListener('yt-page-data-updated', 绑定播放器广告观察器);
+            // 播放器状态更新时检查 AI 配音（原始音轨方案依赖该事件，借鉴 ElectroKnight22 实现）
+            window.addEventListener('yt-player-updated', 防止自动配音, true);
 
             // DOM 变化监听：页面有新增节点时，防抖后统一清理
             // 加入 ±25ms 随机 jitter，打破固定 debounce 模式
@@ -2107,12 +2874,13 @@
                     创建统计面板(); // 兜底：万一初始化时 body 还没准备好，或被框架移除
                     绑定播放器广告观察器();
                     绕过年龄限制();
+                    处理检测弹窗(); // 广告拦截检测弹窗出现时自动关闭
+                    处理暂停确认(); // 「继续观看」确认框出现时自动确认
                     处理视频广告();
                     移除广告横幅();
+                    扫描赞助面板(); // engagement 面板出现时检查（节点级去重，代价极低）
                     保持视频自动播放();
                     提升视频画质();
-                    扫描统计信息面板(); // 统计信息面板出现时汉化 + 网速转换
-                    处理预测倒赞(); // 视频页操作栏出现时拉取并注入倒赞
                 }, 50 + Math.floor(Math.random() * 50));
             });
             // 只监听节点增删，不监听属性变化 —— 大幅降低回调频率（核心性能优化）
@@ -2126,14 +2894,30 @@
                     return 基准 + Math.floor(Math.random() * 范围 * 2) - 范围;
                 }
                 function 主循环() {
+                    // 500ms 主循环只保留广告相关的时效性检查（性能优化：重活移入低频循环）
                     绑定播放器广告观察器();
                     处理视频广告();
                     移除广告横幅();
-                    扫描统计信息面板(); // 统计信息面板出现时汉化 + 网速转换
-                    处理预测倒赞(); // 持续确保倒赞数据已注入
+                    绕过年龄限制(); // 配合观察器让「卡住计数」有稳定节奏
+                    处理检测弹窗();
+                    处理暂停确认();
+                    处理赞助片段(); // 处于赞助片段内时跳到片段结束（需要 500ms 级精度）
                     setTimeout(主循环, 抖动间隔(500, 100));
                 }
                 setTimeout(主循环, 抖动间隔(500, 100));
+            })();
+
+            // 低频兜底循环：非时效敏感的重活放这里，减轻主线程压力
+            (function 启动低频循环() {
+                function 低频循环() {
+                    防止自动配音(); // 检查 AI 配音（yt-player-updated 事件之外的兜底）
+                    处理中文字幕(); // 自动开启 CC 并翻译为中文
+                    处理预测倒赞(); // 持续确保倒赞数据已注入
+                    扫描赞助面板(); // engagement 面板兜底扫描
+                    扫描统计信息面板(); // 统计信息面板出现时汉化 + 网速转换
+                    setTimeout(低频循环, 抖动间隔(2000, 300));
+                }
+                setTimeout(低频循环, 抖动间隔(1500, 300));
             })();
 
             // 低频兜底：确保面板始终存在（万一被页面移除则重建）
