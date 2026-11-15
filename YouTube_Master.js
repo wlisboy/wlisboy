@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         YouTube 优化大师
 // @namespace    https://t.me/CMLiussss
-// @version      0.7.8-fix
-// @description  YouTube 视频体验增强：v0.7.8 跳过按钮+seekTo+10s冷却，无hooks无循环。含画质/布局/年龄/倒赞等功能。
+// @version      0.7.9
+// @description  YouTube 视频体验增强：跳过按钮+seekTo+10s冷却，无hooks无循环。含画质/布局/年龄/倒赞等功能。
 // @author       CMLiussss
 // @icon         https://raw.cmliussss.net/favicon.ico
 // @match        https://www.youtube.com/*
@@ -11,8 +11,8 @@
 // @grant        none
 // @license      MIT
 // @noframes
-// @updateURL    https://raw.cmliussss.net/js/YouTube_Master.js
-// @downloadURL  https://raw.cmliussss.net/js/YouTube_Master.js
+// @updateURL    https://cdn.jsdelivr.net/gh/wlisboy/wlisboy@main/YouTube_Master.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/wlisboy/wlisboy@main/YouTube_Master.js
 // ==/UserScript==
 
 (function () {
@@ -29,19 +29,28 @@
     function logWarn() { console.warn(日志标签, 样式警告, ...arguments); }
     function logError() { console.error(日志标签, 样式错误, ...arguments); }
 
-    logOk('v0.7.8 脚本已注入 →', location.href);
+    logOk('v0.7.9 脚本已注入 →', location.href);
 
     // ===== Trusted Types 兼容 =====
     // YouTube 启用了 CSP「require-trusted-types-for 'script'」，所有 innerHTML 赋值
     // 必须是 TrustedHTML 类型，否则浏览器直接抛错拦截。这里建一个放行 policy 来包装。
     let 创建HTML = (s) => s; // 不支持 Trusted Types 的环境直接透传字符串
     if (window.trustedTypes && window.trustedTypes.createPolicy) {
-        try {
-            const policy = window.trustedTypes.createPolicy('nextshield-adb', { createHTML: (s) => s });
-            创建HTML = (s) => policy.createHTML(s);
-            logOk('Trusted Types policy「nextshield-adb」已创建');
-        } catch (e) {
-            logWarn('创建 Trusted Types policy 失败（可能名称冲突）:', e.message);
+        // 名称冲突时换随机后缀重试：重复安装时两个实例会同时抢「nextshield-adb」这个名字，
+        // 后到的 createPolicy 直接抛错；若就此放弃、退回字符串透传，
+        // 在启用 Trusted Types 的页面上后续 innerHTML 赋值会抛 TypeError，
+        // 连锁打断初始化（面板创建在观察器/定时器挂载之前，一炸全停）。
+        for (let 尝试 = 1; 尝试 <= 5; 尝试++) {
+            const 名称 = 尝试 === 1 ? 'nextshield-adb'
+                : 'nextshield-adb-' + Math.random().toString(36).slice(2, 8);
+            try {
+                const policy = window.trustedTypes.createPolicy(名称, { createHTML: (s) => s });
+                创建HTML = (s) => policy.createHTML(s);
+                logOk('Trusted Types policy「' + 名称 + '」已创建');
+                break;
+            } catch (e) {
+                logWarn('创建 Trusted Types policy「' + 名称 + '」失败:', e.message);
+            }
         }
     }
 
@@ -497,6 +506,10 @@
 
     // ===== 创建常驻统计面板（幂等，可安全重复调用） =====
     let 面板节点 = null;
+    // 本实例标记：写进面板的 data-ns-owner 属性。重复安装时两个实例各带不同标记，
+    // 创建面板前先按 DOM 判定——已有结构完整的面板就直接收养，而不是拆掉重建，
+    // 否则两个实例会互拆面板形成无限乒乓（每次重建都打一条成功日志、页面持续空转）。
+    const 实例标记 = 'ns-' + Math.random().toString(36).slice(2, 10);
 
     // ===== 面板拖动定位（持久化到 localStorage，刷新页面/重启浏览器后保留位置） =====
     const 位置存档键 = 'nextshield_adb_position_v1';
@@ -639,15 +652,26 @@
         }
         if (面板节点 && 面板节点.isConnected) return true; // 已存在且仍在页面上
 
-        面板节点 = null; // 上次的引用可能已脱离 DOM，清掉重建
+        // DOM 判定幂等：页面上已挂着结构完整的面板就直接收养（本实例引用丢失、
+        // 或重复安装的另一实例建的都一样），只有半截/损坏的残留才拆掉重建。
         const 旧的 = document.querySelector('.nextshield-stats');
+        if (旧的 && 旧的.querySelector('.ns-header')) {
+            面板节点 = 旧的;
+            if (旧的.dataset.nsOwner !== 实例标记) {
+                旧的.dataset.nsOwner = 实例标记;
+                logWarn('页面上已有统计面板（可能重复安装了本脚本），已直接接管，不再重建');
+            }
+            刷新面板();
+            return true;
+        }
         if (旧的) {
-            logInfo('发现残留旧面板，移除后重建');
+            logInfo('发现损坏的残留面板，移除后重建');
             旧的.remove();
         }
 
         面板节点 = document.createElement('div');
         面板节点.className = 'nextshield-stats';
+        面板节点.dataset.nsOwner = 实例标记; // 标记归属，供下次引用失效时收养判定
         面板节点.innerHTML = 创建HTML(`
             <div class="ns-header">
                 <span class="ns-shield">🛡️</span>
